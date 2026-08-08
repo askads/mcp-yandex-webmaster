@@ -39,7 +39,9 @@ export function registerRawTool(server: McpServer, client: WebmasterClient): voi
         const resolved = /\{user[-_]id\}/.test(path)
           ? path.replace(/\{user[-_]id\}/g, String(await client.userId()))
           : path;
-        return ok(await client.request(m, resolved, body));
+        // The description promises "body is only used with POST" — keep DELETE
+        // (and GET) bodyless even if the model passes one anyway.
+        return ok(await client.request(m, resolved, m === "POST" ? body : undefined));
       } catch (e) {
         return fail(e);
       }

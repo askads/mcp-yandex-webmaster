@@ -31,8 +31,8 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
   applies the config default and URL-encodes the id, failing fast without a fetch when
   both are missing) and query-string building (arrays become repeated params, undefined
   is dropped). `request()` resolves the path against the base and rejects any path that
-  escapes to a foreign origin (SSRF guard), retries 429 always but 5xx/network **only
-  for GET** (a 502 after a committed write must not duplicate it), honors `Retry-After`,
+  escapes to a foreign origin (SSRF guard), retries 429 (except `QUOTA_EXCEEDED`) but
+  5xx/network **only for GET** (a 502 after a committed write must not duplicate it), honors `Retry-After`,
   enforces an AbortController timeout that also covers reading the body, and throws
   `WebmasterError(status, body)`.
 - `src/types.ts` — config + normalized unions; `WebmasterError` parses the API's
@@ -58,8 +58,9 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
   a repeat is a 409). `raw_request` carries `DESTRUCTIVE` because DELETE endpoints are
   reachable through it. Everything else is `READ_ONLY`. `annotations.test.ts` pins the
   full tool → hints map.
-- **Retry policy follows idempotency.** 429 is always safe to retry (nothing committed);
-  5xx and network errors are retried for GET only. Don't loosen this in `request()`.
+- **Retry policy follows idempotency.** 429 is safe to retry (nothing committed) —
+  except `QUOTA_EXCEEDED`, the daily recrawl quota that backoff cannot refill; 5xx and
+  network errors are retried for GET only. Don't loosen this in `request()`.
 - **Wire mapping lives in the client, not the tools.** Tools accept the normalized
   snake_case vocabulary (`total_shows`, `mobile_and_tablet`, `dns`, ...) and must not
   know the API's UPPER_CASE values — add any mapping in `client.ts`.

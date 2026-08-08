@@ -30,7 +30,7 @@ export interface WebmasterConfig {
   apiBase: string;
   /** Per-request timeout in milliseconds. Defaults to 60_000. */
   timeoutMs?: number;
-  /** Max retries for transient errors (429 rate limit; 5xx/network for reads). Defaults to 3. */
+  /** Max retries for transient errors (429 rate limit, except the daily QUOTA_EXCEEDED; 5xx/network for reads). Defaults to 3. */
   maxRetries?: number;
   /** Base backoff in milliseconds, doubled each retry. Defaults to 500. */
   retryBaseMs?: number;
@@ -44,6 +44,7 @@ const ERROR_HINTS: Record<string, string> = {
   HOST_NOT_VERIFIED: "подтвердите права на сайт (get_verification_status → start_verification)",
   HOST_NOT_LOADED: "данные о сайте ещё не загружены в Вебмастер — попробуйте позже",
   HOST_NOT_INDEXED: "сайт ещё не проиндексирован роботом",
+  QUOTA_EXCEEDED: "суточная квота переобхода исчерпана — попробуйте завтра",
 };
 
 /**

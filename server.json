@@ -49,7 +49,7 @@
         },
         {
           "name": "YANDEX_WEBMASTER_MAX_RETRIES",
-          "description": "Retries on transient errors (429 always; 5xx/network for reads).",
+          "description": "Retries on transient errors (429 — except the daily QUOTA_EXCEEDED; 5xx/network for reads).",
           "isRequired": false,
           "default": "3"
         }

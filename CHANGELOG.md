@@ -21,10 +21,12 @@
   - ссылки: `get_external_links`;
   - escape hatch: `raw_request` (GET/POST/DELETE, подстановка `{user-id}`,
     SSRF-гард на относительные пути).
-- Ретраи с бэкоффом (учёт `Retry-After`): 429 — всегда, 5xx/сетевые — только для
-  чтения (запись после 5xx не дублируется); таймаут покрывает и чтение тела;
+- Ретраи с бэкоффом (учёт `Retry-After`): 429 — кроме `QUOTA_EXCEEDED` (суточную
+  квоту переобхода бэкофф не вернёт), 5xx/сетевые — только для чтения (запись
+  после 5xx не дублируется); таймаут покрывает и чтение тела;
   `WebmasterError(status, body)` с разбором `{error_code, error_message}` и
-  подсказками для `HOST_NOT_VERIFIED` / `HOST_NOT_LOADED` / `HOST_NOT_INDEXED`.
+  подсказками для `HOST_NOT_VERIFIED` / `HOST_NOT_LOADED` / `HOST_NOT_INDEXED` /
+  `QUOTA_EXCEEDED`.
 - Аннотации на каждом туле: `READ_ONLY` / `WRITE` (создающие операции) /
   `DESTRUCTIVE` (`raw_request` — через него доступны DELETE-ручки).
 - Анонимная телеметрия использования (`server_start`, `tool_call`,

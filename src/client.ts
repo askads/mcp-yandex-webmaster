@@ -125,10 +125,11 @@ export class WebmasterClient {
 
   /**
    * Low-level request to a Webmaster API path relative to the /v4 base (e.g.
-   * "user" or "user/123/hosts"). Retries 429 always; 5xx and network
-   * errors/timeouts only for idempotent (GET) requests — the API has writes
-   * (add site/sitemap, recrawl, verification) and a 502 after a committed write
-   * must not duplicate it. Any other non-2xx throws a {@link WebmasterError}.
+   * "user" or "user/123/hosts"). Retries 429 (except QUOTA_EXCEEDED — a daily
+   * quota that backoff cannot bring back); 5xx and network errors/timeouts only
+   * for idempotent (GET) requests — the API has writes (add site/sitemap,
+   * recrawl, verification) and a 502 after a committed write must not duplicate
+   * it. Any other non-2xx throws a {@link WebmasterError}.
    */
   async request<T = unknown>(
     method: HttpMethod,
@@ -181,14 +182,6 @@ export class WebmasterClient {
         throw err;
       }
 
-      // A 429 never committed anything, so it is safe to retry even for writes;
-      // 5xx might have — gate those (and network errors above) to GET.
-      const transient = res.status === 429 || (idempotent && res.status >= 500 && res.status < 600);
-      if (transient && attempt < this.maxRetries) {
-        await delay(this.backoffMs(attempt, res));
-        continue;
-      }
-
       let data: unknown = undefined;
       if (text) {
         try {
@@ -196,6 +189,20 @@ export class WebmasterClient {
         } catch {
           data = text;
         }
+      }
+
+      // A 429 never committed anything, so it is safe to retry even for writes —
+      // except QUOTA_EXCEEDED: that is the recrawl DAILY quota, seconds of
+      // backoff cannot bring it back, so fail fast with the hint instead.
+      // 5xx might have committed — gate those (and network errors above) to GET.
+      const errorCode =
+        typeof data === "object" && data !== null ? (data as Record<string, unknown>).error_code : undefined;
+      const transient =
+        (res.status === 429 && errorCode !== "QUOTA_EXCEEDED") ||
+        (idempotent && res.status >= 500 && res.status < 600);
+      if (transient && attempt < this.maxRetries) {
+        await delay(this.backoffMs(attempt, res));
+        continue;
       }
 
       if (!res.ok) throw new WebmasterError(res.status, data);

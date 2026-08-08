@@ -65,6 +65,17 @@ test("raw_request POSTs a JSON body verbatim", async () => {
   }
 });
 
+test("raw_request drops the body for non-POST methods, as its description promises", async () => {
+  const { tools, calls, restore } = harness();
+  try {
+    await tools.raw_request({ path: "user/7/hosts/x", method: "DELETE", body: { stray: true } });
+    assert.equal(calls[0].method, "DELETE");
+    assert.equal(calls[0].body, undefined);
+  } finally {
+    restore();
+  }
+});
+
 test("raw_request rejects an absolute path as an isError result, without fetching", async () => {
   for (const evil of ["https://evil.example/steal", "http://evil.example/x", "\\\\evil.example/x"]) {
     const { tools, calls, restore } = harness();

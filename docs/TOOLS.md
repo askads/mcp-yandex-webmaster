@@ -70,4 +70,4 @@ Notes:
 | `YANDEX_WEBMASTER_HOST_ID` | no | — | Default `host_id` used when a tool call omits one. |
 | `YANDEX_WEBMASTER_API_BASE` | no | `https://api.webmaster.yandex.net/v4` | API root override. |
 | `YANDEX_WEBMASTER_TIMEOUT_MS` | no | `60000` | Per-request timeout, ms. |
-| `YANDEX_WEBMASTER_MAX_RETRIES` | no | `3` | Retries on 429 (always) and 5xx/network (GET only). |
+| `YANDEX_WEBMASTER_MAX_RETRIES` | no | `3` | Retries on 429 (except the daily `QUOTA_EXCEEDED`) and 5xx/network (GET only). |

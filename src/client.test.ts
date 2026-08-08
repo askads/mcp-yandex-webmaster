@@ -327,6 +327,26 @@ test("request() retries a 429 rate limit — even for a write — then returns t
   }
 });
 
+test("request() never retries a 429 QUOTA_EXCEEDED (a daily quota) and surfaces the hint", async () => {
+  let calls = 0;
+  const mock = mockFetch(() => {
+    calls++;
+    return new Response(
+      JSON.stringify({ error_code: "QUOTA_EXCEEDED", error_message: "Daily quota exceeded" }),
+      { status: 429 },
+    );
+  });
+  try {
+    await assert.rejects(
+      () => makeClient({ maxRetries: 3 }).recrawlUrl({ url: "https://example.com/p" }),
+      /HTTP 429: \[QUOTA_EXCEEDED\].*суточная квота/,
+    );
+    assert.equal(calls, 1, "backoff cannot refill a daily quota — must not retry");
+  } finally {
+    mock.restore();
+  }
+});
+
 test("request() retries a 5xx for GET then returns the result", async () => {
   let calls = 0;
   const mock = mockFetch(() => {
