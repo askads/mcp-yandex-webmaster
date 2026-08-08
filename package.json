@@ -1,0 +1,23 @@
+{
+  "name": "mcp-yandex-webmaster",
+  "version": "0.0.1",
+  "description": "MCP-сервер для Yandex Webmaster — индексация, поисковые запросы, sitemap, диагностика сайта и внешние ссылки. Для Claude, Cursor, Codex и других AI-клиентов.",
+  "keywords": ["mcp", "model-context-protocol", "yandex", "yandex-webmaster", "seo", "claude", "cursor", "codex"],
+  "homepage": "https://github.com/askads/mcp-yandex-webmaster#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/askads/mcp-yandex-webmaster.git"
+  },
+  "license": "MIT",
+  "author": "gistrec <gistrec@gmail.com>",
+  "type": "module",
+  "bin": {
+    "mcp-yandex-webmaster": "index.js"
+  },
+  "files": [
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
