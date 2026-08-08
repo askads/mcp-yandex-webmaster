@@ -1,0 +1,59 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.askads/mcp-yandex-webmaster",
+  "title": "Yandex Webmaster MCP",
+  "description": "MCP server for Yandex Webmaster API: indexing, search queries, sitemaps, diagnostics, links.",
+  "websiteUrl": "https://github.com/askads/mcp-yandex-webmaster#readme",
+  "repository": {
+    "url": "https://github.com/askads/mcp-yandex-webmaster",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "mcp-yandex-webmaster",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "YANDEX_OAUTH_TOKEN",
+          "description": "Yandex OAuth token with Webmaster access, sent as `Authorization: OAuth <token>`. Treat it as a secret.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "YANDEX_USER_ID",
+          "description": "Token owner's user id; auto-detected via GET /v4/user when unset.",
+          "isRequired": false
+        },
+        {
+          "name": "YANDEX_WEBMASTER_HOST_ID",
+          "description": "Default host_id (e.g. https:example.com:443) used when a tool call omits one.",
+          "isRequired": false
+        },
+        {
+          "name": "YANDEX_WEBMASTER_API_BASE",
+          "description": "API root override.",
+          "isRequired": false,
+          "default": "https://api.webmaster.yandex.net/v4"
+        },
+        {
+          "name": "YANDEX_WEBMASTER_TIMEOUT_MS",
+          "description": "Per-request timeout in milliseconds.",
+          "isRequired": false,
+          "default": "60000"
+        },
+        {
+          "name": "YANDEX_WEBMASTER_MAX_RETRIES",
+          "description": "Retries on transient errors (429 always; 5xx/network for reads).",
+          "isRequired": false,
+          "default": "3"
+        }
+      ]
+    }
+  ]
+}
