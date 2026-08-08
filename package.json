@@ -1,23 +1,59 @@
 {
   "name": "mcp-yandex-webmaster",
-  "version": "0.0.1",
-  "description": "MCP-сервер для Yandex Webmaster — индексация, поисковые запросы, sitemap, диагностика сайта и внешние ссылки. Для Claude, Cursor, Codex и других AI-клиентов.",
-  "keywords": ["mcp", "model-context-protocol", "yandex", "yandex-webmaster", "seo", "claude", "cursor", "codex"],
-  "homepage": "https://github.com/askads/mcp-yandex-webmaster#readme",
+  "version": "0.1.0",
+  "description": "MCP server for the Yandex Webmaster API v4 — site indexing, search queries, sitemaps, diagnostics, external links and page recrawl for AI agents.",
+  "mcpName": "io.github.askads/mcp-yandex-webmaster",
+  "type": "module",
+  "bin": {
+    "mcp-yandex-webmaster": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "test"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "smoke": "node --import tsx src/smoke.ts",
+    "test": "npm run test:src && npm run test:dist",
+    "test:src": "node --import tsx --test $(find src -name '*.test.ts')",
+    "test:dist": "npm run build && node --test test/dist-smoke.test.js",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "yandex",
+    "yandex-webmaster",
+    "webmaster",
+    "seo",
+    "site-indexing",
+    "search-queries",
+    "sitemap"
+  ],
+  "license": "MIT",
+  "author": "Aleksandr Kovalko",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/askads/mcp-yandex-webmaster.git"
   },
-  "license": "MIT",
-  "author": "gistrec <gistrec@gmail.com>",
-  "type": "module",
-  "bin": {
-    "mcp-yandex-webmaster": "index.js"
+  "homepage": "https://github.com/askads/mcp-yandex-webmaster#readme",
+  "bugs": {
+    "url": "https://github.com/askads/mcp-yandex-webmaster/issues"
   },
-  "files": [
-    "index.js"
-  ],
-  "engines": {
-    "node": ">=18"
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^5.7.0"
   }
 }
