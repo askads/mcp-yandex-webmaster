@@ -20,7 +20,7 @@ Claude, Cursor, Codex и других AI-клиентов на естестве�
    ```bash
    claude mcp add yandex-webmaster \
      -e YANDEX_OAUTH_TOKEN=ваш_токен \
-     -- npx -y mcp-yandex-webmaster
+     -- npx -y mcp-yandex-webmaster@latest
    ```
 
 3. Спросите ассистента: «Какие проблемы Вебмастер видит на моём сайте и как менялись показы за неделю?»
@@ -69,7 +69,7 @@ Claude, Cursor, Codex и других AI-клиентов на естестве�
 ```bash
 claude mcp add yandex-webmaster \
   -e YANDEX_OAUTH_TOKEN=ваш_токен \
-  -- npx -y mcp-yandex-webmaster
+  -- npx -y mcp-yandex-webmaster@latest
 ```
 
 </details>
@@ -84,7 +84,7 @@ claude mcp add yandex-webmaster \
   "mcpServers": {
     "yandex-webmaster": {
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster"],
+      "args": ["-y", "mcp-yandex-webmaster@latest"],
       "env": { "YANDEX_OAUTH_TOKEN": "ваш_токен" }
     }
   }
@@ -103,7 +103,7 @@ claude mcp add yandex-webmaster \
   "mcpServers": {
     "yandex-webmaster": {
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster"],
+      "args": ["-y", "mcp-yandex-webmaster@latest"],
       "env": { "YANDEX_OAUTH_TOKEN": "ваш_токен" }
     }
   }
@@ -123,7 +123,7 @@ claude mcp add yandex-webmaster \
     "yandex-webmaster": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster"],
+      "args": ["-y", "mcp-yandex-webmaster@latest"],
       "env": { "YANDEX_OAUTH_TOKEN": "ваш_токен" }
     }
   }
