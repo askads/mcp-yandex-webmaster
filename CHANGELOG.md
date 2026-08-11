@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-08-11
+
+### Изменено
+
+- Объявлен стабильным. Набор инструментов, схемы входных данных и переменные окружения версии
+  0.1.x переносятся без изменений — релиз фиксирует стабильность API, а не новое поведение.
+
 ## [0.1.0] — 2026-08-09
 
 ### Добавлено
@@ -37,5 +44,6 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
-[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.0.0
 [0.1.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v0.1.0
