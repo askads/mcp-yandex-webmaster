@@ -2,6 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/mcp-yandex-webmaster)](https://www.npmjs.com/package/mcp-yandex-webmaster)
 [![CI](https://github.com/askads/mcp-yandex-webmaster/actions/workflows/ci.yml/badge.svg)](https://github.com/askads/mcp-yandex-webmaster/actions/workflows/ci.yml)
+[![Glama](https://glama.ai/mcp/servers/askads/mcp-yandex-webmaster/badges/score.svg)](https://glama.ai/mcp/servers/askads/mcp-yandex-webmaster)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 MCP-сервер для **Яндекс Вебмастера**: спрашивайте состояние сайта в поиске Яндекса —
