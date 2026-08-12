@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-08-12
+
+### Добавлено
+
+- Инструкции сервера. В ответе MCP `initialize` теперь едет короткая справка для вызывающей
+  модели: чем этот API является и чем не является, чего он не умеет, а также квоты, правила
+  повторов и обманчивые ошибки, влияющие на то, как им пользоваться. Раньше это знание жило
+  только в README, который модель не читает.
+
 ## [1.0.0] — 2026-08-11
 
 ### Изменено
@@ -44,6 +53,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
-[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.0.1
 [1.0.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.0.0
 [0.1.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v0.1.0

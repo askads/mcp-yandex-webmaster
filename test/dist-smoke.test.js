@@ -106,6 +106,11 @@ test("built server answers the MCP handshake over stdio and lists every tool", a
   const client = new Client({ name: "dist-smoke", version: "0.0.0" });
   try {
     await client.connect(transport);
+    // The initialize result carries the prose the calling model reads before it
+    // picks a tool — an empty one would ship the server without its briefing.
+    const instructions = client.getInstructions();
+    assert.equal(typeof instructions, "string", "initialize result must carry instructions");
+    assert.ok(instructions.trim().length > 0, "instructions must not be empty");
     const { tools } = await client.listTools();
     assert.deepEqual(tools.map((t) => t.name).sort(), ALL_TOOLS);
     const raw = tools.find((t) => t.name === "raw_request");

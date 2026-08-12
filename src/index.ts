@@ -12,6 +12,26 @@ import { registerIndexingTools } from "./tools/indexing.js";
 import { registerLinkTools } from "./tools/links.js";
 import { registerRawTool } from "./tools/raw.js";
 
+/**
+ * Prose the calling model receives in the `initialize` result, before it picks a
+ * tool — the only place to say what the tool list cannot: which Yandex product
+ * this is, where the API stops, what a call costs and which errors mean
+ * something other than they say. Kept in Russian, like the tool descriptions.
+ */
+const INSTRUCTIONS =
+  "Это Яндекс Вебмастер API v4 — состояние сайта в органическом поиске Яндекса: индексация, ИКС, " +
+  "диагностика, sitemap, внешние ссылки, показы и клики по запросам. Не Метрика (посещаемость " +
+  "сайта) и не Вордстат (спрос по словам), рекламных данных тут нет. Почти всё здесь — чтение: " +
+  "состояние меняют только add_site, add_sitemap, recrawl_url и start_verification, и они лишь " +
+  "создают, ничего не удаляя и не редактируя. Видны только сайты аккаунта токена, а статистика — " +
+  "лишь при подтверждённых правах. Переобход тратит суточную квоту сайта (429 QUOTA_EXCEEDED до " +
+  "завтра не лечится), не отправляйте страницы пачками; прочие 429 сервер ретраит сам с бэкоффом " +
+  "(5xx и таймауты — только на чтении). HOST_NOT_VERIFIED значит «нет прав», " +
+  "HOST_NOT_LOADED/HOST_NOT_INDEXED — «данных ещё нет», а не пустой ответ; 409 *_ALREADY_ADDED или " +
+  "VERIFICATION_ALREADY_IN_PROGRESS — «уже сделано», повтор не поможет; INVALID_USER_ID — не " +
+  "проблема токена, а неверный YANDEX_USER_ID (в ответе есть available_user_id). Удалить сайт или " +
+  "sitemap можно только через raw_request с DELETE — безвозвратно и лишь по явной просьбе.";
+
 /** Reads the package version so the server reports its real version to MCP clients. */
 function readVersion(): string {
   try {
@@ -47,10 +67,14 @@ async function main(): Promise<void> {
   const config = await loadConfigOrExit(telemetry);
   const client = new WebmasterClient(config);
 
-  const server = new McpServer({
-    name: "mcp-yandex-webmaster",
-    version: readVersion(),
-  });
+  const server = new McpServer(
+    {
+      name: "mcp-yandex-webmaster",
+      version: readVersion(),
+    },
+    // Surfaces as `instructions` in the initialize result (ServerOptions, not serverInfo).
+    { instructions: INSTRUCTIONS },
+  );
 
   instrumentToolCalls(server, telemetry);
   server.server.oninitialized = () => {
