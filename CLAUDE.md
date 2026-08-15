@@ -21,16 +21,22 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
 
 ## Architecture
 
-- `src/config.ts` — env → config; throws `ConfigError` (with a `reason` code) instead of
-  exiting, so `index.ts` can report the drop-off before dying.
-  Requires `YANDEX_OAUTH_TOKEN`; optional `YANDEX_USER_ID`, `YANDEX_WEBMASTER_HOST_ID`,
+- `src/config.ts` — env → config. A missing `YANDEX_OAUTH_TOKEN` is NOT an error: the field
+  stays `undefined` (an empty string reads as absent) and the server starts degraded, with the
+  client raising `CredentialsError` at call time. `ConfigError` (with a `reason` code) is
+  reserved for malformed values — today a non-numeric `YANDEX_USER_ID` — and is caught by
+  `loadConfigOrDegraded` in `index.ts`. Also home to `CredentialsError` /
+  `MISSING_TOKEN_MESSAGE` (opens with the historical startup error verbatim, then names the
+  variable and the restart). Optional `YANDEX_USER_ID`, `YANDEX_WEBMASTER_HOST_ID`,
   `YANDEX_WEBMASTER_API_BASE`, `YANDEX_WEBMASTER_TIMEOUT_MS`, `YANDEX_WEBMASTER_MAX_RETRIES`.
 - `src/client.ts` — one typed method per endpoint. Owns the wire vocabulary
   (`TOTAL_SHOWS`, `MOBILE_AND_TABLET`, `DNS`, ... via `map*` helpers), the user-id
   promise cache (`userId()`, failure not cached), the host path builder (`hostPath()`
   applies the config default and URL-encodes the id, failing fast without a fetch when
   both are missing) and query-string building (arrays become repeated params, undefined
-  is dropped). `request()` resolves the path against the base and rejects any path that
+  is dropped). `request()` first rejects a missing token with `CredentialsError` — before the
+  request is built, the retries and fetch, which also stops the user-id auto-detection — then
+  resolves the path against the base and rejects any path that
   escapes to a foreign origin (SSRF guard), retries 429 (except `QUOTA_EXCEEDED`) but
   5xx/network **only for GET** (a 502 after a committed write must not duplicate it), honors `Retry-After`,
   enforces an AbortController timeout that also covers reading the body, and throws
@@ -44,15 +50,33 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
   sitemaps; `links.ts` — external links; `raw.ts` — `raw_request` (substitutes a
   `{user-id}` placeholder). `util.ts` — `ok`/`fail`, the `READ_ONLY`/`WRITE`/`DESTRUCTIVE`
   annotation constants and shared zod schema factories (`hostId`, `isoDate`).
-- `src/index.ts` — wires every `register*` into the McpServer.
+- `src/index.ts` — wires every `register*` into the McpServer. `loadConfigOrDegraded()`
+  catches `ConfigError`, pings `startup_failed` (fire-and-forget) and degrades the config to
+  "no credentials"; an unconfigured start prepends `UNCONFIGURED_PREFIX` — plus
+  `Проблема конфигурации: <message>` when a ConfigError was caught — to the initialize
+  `instructions`, and `oninitialized` sends `server_start` for a configured install or
+  `unconfigured_start` (with the reason) otherwise.
 - `src/telemetry.ts` — anonymous usage pings (ids/names/versions only, never data or
   arguments; fire-and-forget, must never block or throw; opt-out `ASKADS_TELEMETRY=0`).
-  `startup_failed` is the exception: `sendBlocking` awaits it, because the caller exits
-  right after. Its `reason` is a closed vocabulary (`missing_token`, `invalid_user_id`) —
-  never a variable's name or value.
+  `server_start` means "a usable install started"; `unconfigured_start` is a degraded start
+  and `startup_failed` a malformed config caught at load — both carry a `reason` from a
+  closed vocabulary (`missing_token`, `invalid_user_id`) — never a variable's name or value.
 
 ## Conventions (do not break)
 
+- **Never exit because of configuration.** A server that dies before the MCP handshake leaves
+  the user with a red cross and no reason — telemetry across this line of servers showed that
+  state accounted for nearly every unconfigured install, and almost none of them recovered.
+  A missing token is a survivable state: start, answer initialize (with the unconfigured
+  prefix in `instructions`) and tools/list, and let the first tool call fail with
+  `CredentialsError`. There are no login tools: the token comes only from the environment, so
+  the fix is the operator setting `YANDEX_OAUTH_TOKEN` and restarting the server.
+  `config.test.ts`, `client.test.ts` and `test/dist-smoke.test.js` pin this.
+- **Credential failures are not transport failures.** `CredentialsError` is thrown at the top
+  of `request()` — before the request is built, the retry/backoff loop and fetch (every call,
+  including the user-id auto-detection, funnels through there) — retrying a missing token
+  burns seconds of backoff before the user sees the one message that helps. Pinned by
+  "fetch must not be called" assertions in `client.test.ts`.
 - **Writes are gated.** Only `add_site`, `add_sitemap`, `recrawl_url` and
   `start_verification` are writes; they carry `WRITE` (non-destructive, non-idempotent —
   a repeat is a 409). `raw_request` carries `DESTRUCTIVE` because DELETE endpoints are
