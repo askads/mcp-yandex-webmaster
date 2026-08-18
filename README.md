@@ -48,12 +48,13 @@ MCP-сервер, который позволяет работать с данн
 ## Быстрый старт
 
 Нужен Node.js 20+. `npx` скачает сервер при первом запуске — отдельно устанавливать пакет не нужно.
-Токен заранее получать не обязательно: сервер умеет [подключаться к Вебмастеру прямо в диалоге](#подключение-из-диалога).
-Переменная `YANDEX_OAUTH_TOKEN` в примерах ниже — необязательная альтернатива для CI и автоматических установок
-([как получить токен](#доступ-к-данным)); если её не указывать, просто уберите блок `env`.
+Токен заранее получать не нужно: подключение проходит прямо в диалоге.
 
 1. Добавьте сервер в своё AI-приложение. Выберите инструкцию ниже.
-2. Откройте новый диалог и напишите: **«Подключи Яндекс Вебмастер»**, а после подключения — **«Какие критичные проблемы сейчас видит диагностика на моём сайте?»**
+2. Напишите: **«Подключи Яндекс Вебмастер»** — ассистент проведёт через вход в Яндекс и проверит, что видит ваши сайты.
+3. Задайте первый вопрос, например: **«Какие критичные проблемы сейчас видит диагностика на моём сайте?»**
+
+Для CI и автоматических установок можно задать готовый токен — см. [Доступ к данным](#доступ-к-данным).
 
 <details open>
 <summary><b>Codex</b></summary>
@@ -62,8 +63,7 @@ MCP-сервер, который позволяет работать с данн
 
 - имя: <code>yandex-webmaster</code>;
 - команда: <code>npx</code>;
-- аргументы: <code>-y mcp-yandex-webmaster@latest</code>;
-- переменная окружения: <code>YANDEX_OAUTH_TOKEN</code> со своим токеном.
+- аргументы: <code>-y mcp-yandex-webmaster@latest</code>.
 
 Сохраните сервер. Он появится в списке MCP-серверов Codex.
 
@@ -71,7 +71,6 @@ MCP-сервер, который позволяет работать с данн
 
 ```bash
 codex mcp add yandex-webmaster \
-  --env YANDEX_OAUTH_TOKEN=ваш_токен \
   -- npx -y mcp-yandex-webmaster@latest
 ```
 
@@ -84,7 +83,6 @@ codex mcp add yandex-webmaster \
 
 ```bash
 claude mcp add --transport stdio --scope user \
-  --env YANDEX_OAUTH_TOKEN=ваш_токен \
   yandex-webmaster -- npx -y mcp-yandex-webmaster@latest
 ```
 
@@ -102,10 +100,7 @@ claude mcp add --transport stdio --scope user \
   "mcpServers": {
     "yandex-webmaster": {
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster@latest"],
-      "env": {
-        "YANDEX_OAUTH_TOKEN": "ваш_токен"
-      }
+      "args": ["-y", "mcp-yandex-webmaster@latest"]
     }
   }
 }
@@ -125,10 +120,7 @@ claude mcp add --transport stdio --scope user \
   "mcpServers": {
     "yandex-webmaster": {
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster@latest"],
-      "env": {
-        "YANDEX_OAUTH_TOKEN": "ваш_токен"
-      }
+      "args": ["-y", "mcp-yandex-webmaster@latest"]
     }
   }
 }
@@ -139,7 +131,7 @@ claude mcp add --transport stdio --scope user \
 <details>
 <summary><b>VS Code</b></summary>
 
-В палитре команд выполните <b>MCP: Open User Configuration</b>. В открывшемся `mcp.json` добавьте сервер и защищённый ввод токена:
+В палитре команд выполните <b>MCP: Open User Configuration</b>. В открывшемся `mcp.json` добавьте сервер:
 
 ```json
 {
@@ -147,20 +139,9 @@ claude mcp add --transport stdio --scope user \
     "yandex-webmaster": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-yandex-webmaster@latest"],
-      "env": {
-        "YANDEX_OAUTH_TOKEN": "${input:yandex-webmaster-token}"
-      }
+      "args": ["-y", "mcp-yandex-webmaster@latest"]
     }
-  },
-  "inputs": [
-    {
-      "type": "promptString",
-      "id": "yandex-webmaster-token",
-      "description": "OAuth-токен Яндекса для Вебмастера",
-      "password": true
-    }
-  ]
+  }
 }
 ```
 
