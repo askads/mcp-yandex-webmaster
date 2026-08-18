@@ -5,7 +5,7 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
-## [Unreleased]
+## [1.1.0] — 2026-08-19
 
 ### Добавлено
 
@@ -95,7 +95,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
-[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.1.0
 [1.0.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.0.1
 [1.0.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.0.0
 [0.1.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v0.1.0
