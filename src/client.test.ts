@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { WebmasterClient } from "./client.js";
+import { CredentialsError, MISSING_TOKEN_MESSAGE } from "./config.js";
 import type { WebmasterConfig } from "./types.js";
 
 const BASE = "https://api.webmaster.yandex.net/v4";
@@ -478,6 +479,53 @@ test("a leading slash stays under the /v4 base", async () => {
   try {
     await makeClient().request("GET", "/user");
     assert.equal(mock.calls[0].url, `${BASE}/user`);
+  } finally {
+    mock.restore();
+  }
+});
+
+// --- Missing token (degraded start) ---
+
+/**
+ * The degraded-start contract: a server without a token still runs, so the
+ * client must fail the call itself — with the exact actionable message, before
+ * any fetch. Zero fetch calls proves the error skips the retry/backoff loop
+ * and the user-id auto-detection alike (maxRetries is deliberately non-zero
+ * here, and listSites would otherwise start with GET /user).
+ */
+test("no token: CredentialsError with the exact text, fetch never called", async () => {
+  const mock = mockFetch(() => new Response("{}", { status: 200 }));
+  try {
+    const client = new WebmasterClient({ apiBase: BASE, maxRetries: 3, retryBaseMs: 0 });
+    await assert.rejects(
+      () => client.listSites(),
+      (err: unknown) => {
+        assert.ok(err instanceof CredentialsError, "must be a CredentialsError");
+        assert.equal((err as Error).name, "CredentialsError");
+        assert.equal((err as Error).message, MISSING_TOKEN_MESSAGE);
+        // The historical startup error, verbatim — the message is the product.
+        assert.ok(
+          (err as Error).message.startsWith(
+            "YANDEX_OAUTH_TOKEN is required (Yandex OAuth token with access to Yandex Webmaster).",
+          ),
+          "the message must open with the historical startup error, verbatim",
+        );
+        assert.match((err as Error).message, /restart the server/, "the fix must mention the restart");
+        return true;
+      },
+    );
+    assert.equal(mock.calls.length, 0, "must not fetch at all — no user-id lookup, no retries");
+  } finally {
+    mock.restore();
+  }
+});
+
+test("an empty token is a missing token, not an empty credential", async () => {
+  const mock = mockFetch(() => new Response("{}", { status: 200 }));
+  try {
+    const client = new WebmasterClient({ token: "", userId: 7, apiBase: BASE, maxRetries: 0 });
+    await assert.rejects(() => client.listSites(), CredentialsError);
+    assert.equal(mock.calls.length, 0);
   } finally {
     mock.restore();
   }

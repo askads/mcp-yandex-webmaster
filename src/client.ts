@@ -1,3 +1,4 @@
+import { CredentialsError } from "./config.js";
 import type { DeviceType, QueryIndicator, QueryOrder, VerificationType, WebmasterConfig } from "./types.js";
 import { WebmasterError } from "./types.js";
 
@@ -137,6 +138,13 @@ export class WebmasterClient {
     body?: Record<string, unknown>,
     query?: QueryParams,
   ): Promise<T> {
+    // A missing token is rejected before the request is built, retried or
+    // sent: it is a configuration problem, not transport trouble, so it must
+    // never enter the retry/backoff loop below — and fetch never fires without
+    // auth. Every call funnels through here, so this also stops the user-id
+    // auto-detection (pinned in client.test.ts).
+    if (!this.config.token) throw new CredentialsError();
+
     // Guard method !== "GET" keeps undici from crashing on a GET-with-body.
     const hasBody = body !== undefined && method !== "GET";
 

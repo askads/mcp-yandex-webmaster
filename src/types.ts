@@ -20,8 +20,12 @@ export type QueryOrder = "total_shows" | "total_clicks";
 export type VerificationType = "dns" | "html_file" | "meta_tag";
 
 export interface WebmasterConfig {
-  /** Yandex OAuth token, sent as `Authorization: OAuth <token>`. Treated as a secret. */
-  token: string;
+  /**
+   * Yandex OAuth token, sent as `Authorization: OAuth <token>`. Treated as a
+   * secret. Absent on a degraded start: the server still runs and the client
+   * raises CredentialsError on the first call that needs the API.
+   */
+  token?: string;
   /** Token owner's user id. When absent the client fetches it via GET /v4/user and caches it. */
   userId?: number;
   /** Default host_id (e.g. "https:example.com:443") used when a tool call omits host_id. */

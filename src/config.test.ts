@@ -47,13 +47,32 @@ function reasonOf(vars: Record<string, string | undefined>): string {
   return caught.reason;
 }
 
-test("a missing OAuth token reports missing_token", () => {
-  assert.equal(reasonOf({ YANDEX_OAUTH_TOKEN: undefined }), "missing_token");
+/**
+ * A missing token used to throw here, which killed the process before the MCP
+ * handshake and left the user with a dead server and no reason. It is now a
+ * survivable state: the server starts degraded and the client raises
+ * CredentialsError on the first call instead (pinned in client.test.ts).
+ * Reverting this would restore that dead end.
+ */
+test("a missing OAuth token is not an error — the config loads without it", () => {
+  withEnv({}, () => {
+    const config = loadConfig();
+    assert.equal(config.token, undefined);
+    assert.equal(config.apiBase, "https://api.webmaster.yandex.net/v4");
+  });
+});
+
+test("an empty YANDEX_OAUTH_TOKEN reads as absent, not as an empty credential", () => {
+  withEnv({ YANDEX_OAUTH_TOKEN: "" }, () => {
+    assert.equal(loadConfig().token, undefined);
+  });
 });
 
 test("a malformed YANDEX_USER_ID reports invalid_user_id", () => {
   assert.equal(reasonOf({ YANDEX_OAUTH_TOKEN: "tok", YANDEX_USER_ID: "abc" }), "invalid_user_id");
   assert.equal(reasonOf({ YANDEX_OAUTH_TOKEN: "tok", YANDEX_USER_ID: "-5" }), "invalid_user_id");
+  // Malformed beats missing: the value is checked even when the token is absent.
+  assert.equal(reasonOf({ YANDEX_USER_ID: "abc" }), "invalid_user_id");
 });
 
 test("a token alone is enough; everything else has a default", () => {

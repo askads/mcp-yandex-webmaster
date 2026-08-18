@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebmasterClient } from "./client.js";
-import { ConfigError, loadConfig } from "./config.js";
+import { ConfigError, DEFAULT_BASE, loadConfig } from "./config.js";
 import { instrumentToolCalls, Telemetry } from "./telemetry.js";
 import type { WebmasterConfig } from "./types.js";
 import { registerHostTools } from "./tools/hosts.js";
@@ -32,6 +32,21 @@ const INSTRUCTIONS =
   "проблема токена, а неверный YANDEX_USER_ID (в ответе есть available_user_id). Удалить сайт или " +
   "sitemap можно только через raw_request с DELETE — безвозвратно и лишь по явной просьбе.";
 
+/**
+ * Prepended to INSTRUCTIONS when no token is configured. The model reads this
+ * before it picks a tool, so an unconfigured session opens with the fix rather
+ * than with a failed call. There is no in-chat login: the token comes only
+ * from the environment, so the fix is an operator action + restart. In Russian,
+ * like INSTRUCTIONS.
+ */
+const UNCONFIGURED_PREFIX =
+  "ВНИМАНИЕ: Яндекс Вебмастер ещё не подключён — не задана переменная окружения " +
+  "YANDEX_OAUTH_TOKEN, поэтому любой вызов инструмента вернёт ошибку. Подключиться из диалога " +
+  "нельзя: оператор должен задать YANDEX_OAUTH_TOKEN (OAuth-токен Яндекса с доступом к API " +
+  "Вебмастера; приложение регистрируется на oauth.yandex.ru, токен выдаёт " +
+  "oauth.yandex.ru/authorize?response_type=token&client_id=<id_приложения>) в конфигурации " +
+  "MCP-клиента и перезапустить сервер — переменные окружения читаются только при старте. ";
+
 /** Reads the package version so the server reports its real version to MCP clients. */
 function readVersion(): string {
   try {
@@ -43,29 +58,42 @@ function readVersion(): string {
 }
 
 /**
- * Loads the config, reporting the drop-off if it is missing. An unconfigured
- * server dies before the MCP handshake, so this ping is the only trace such an
- * install ever leaves — and it has to be awaited, or process.exit() below would
- * kill the request in flight.
+ * Loads the config without dying on a bad value. A server that exits here never
+ * completes the MCP handshake, so the user sees a dead server and no reason.
+ * Instead the problem is carried into the session, where the model can read it
+ * and relay it: the config degrades to "no credentials" and every tool call
+ * fails with the actionable message.
  */
-async function loadConfigOrExit(telemetry: Telemetry): Promise<WebmasterConfig> {
+function loadConfigOrDegraded(telemetry: Telemetry): {
+  config: WebmasterConfig;
+  problem?: ConfigError;
+} {
   try {
-    return loadConfig();
+    return { config: loadConfig() };
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     console.error(`Error: ${err.message}`);
-    await telemetry.sendBlocking("startup_failed", { reason: err.reason });
-    process.exit(1);
+    // Fire-and-forget now that the process survives: the historical
+    // `startup_failed` funnel stays comparable, but nothing blocks startup.
+    telemetry.send("startup_failed", { reason: err.reason });
+    return {
+      config: { apiBase: process.env.YANDEX_WEBMASTER_API_BASE || DEFAULT_BASE },
+      problem: err,
+    };
   }
 }
 
 async function main(): Promise<void> {
   // Anonymous usage pings (ids/names/versions only, never data or arguments);
-  // opt out with ASKADS_TELEMETRY=0. Built before the config so a missing token
-  // can be reported; wired to the server before tools register.
+  // opt out with ASKADS_TELEMETRY=0. Built before the config so a config
+  // problem can be reported; wired to the server before tools register.
   const telemetry = new Telemetry(readVersion());
-  const config = await loadConfigOrExit(telemetry);
+  const { config, problem } = loadConfigOrDegraded(telemetry);
   const client = new WebmasterClient(config);
+
+  // Decided once, at startup: the token comes only from the environment, so
+  // "restart after setting the variable" is the accurate advice to give.
+  const connected = Boolean(config.token);
 
   const server = new McpServer(
     {
@@ -73,13 +101,20 @@ async function main(): Promise<void> {
       version: readVersion(),
     },
     // Surfaces as `instructions` in the initialize result (ServerOptions, not serverInfo).
-    { instructions: INSTRUCTIONS },
+    {
+      instructions: connected
+        ? INSTRUCTIONS
+        : UNCONFIGURED_PREFIX + (problem ? `Проблема конфигурации: ${problem.message} ` : "") + INSTRUCTIONS,
+    },
   );
 
   instrumentToolCalls(server, telemetry);
   server.server.oninitialized = () => {
     telemetry.setClientInfo(server.server.getClientVersion());
-    telemetry.send("server_start");
+    // Split on purpose: `server_start` keeps meaning "a usable install started",
+    // so the unconfigured case gets its own event instead of inflating that number.
+    if (connected) telemetry.send("server_start");
+    else telemetry.send("unconfigured_start", { reason: problem?.reason ?? "missing_token" });
   };
 
   registerHostTools(server, client);
@@ -90,7 +125,9 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("mcp-yandex-webmaster running on stdio");
+  console.error(
+    `mcp-yandex-webmaster running on stdio${connected ? "" : " (no token — set YANDEX_OAUTH_TOKEN and restart)"}`,
+  );
 }
 
 main().catch((err) => {
