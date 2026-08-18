@@ -113,7 +113,28 @@ export function registerAuthTools(
         // authenticates but sees no sites is a wrong-account login, and saying
         // «готово» there just moves the confusion one step later. listSites also
         // resolves the user id, so the lazy auto-detection runs right here.
-        const sites = await client.listSites();
+        //
+        // But the login already succeeded — the token is saved. A failure of
+        // this *verification* call (a hiccup, a Webmaster outage) must not come
+        // back as a bare error that reads as «вход не удался»: the model would
+        // send the user to start_login again for nothing. Failed user-id lookups
+        // are not cached, so the next successful call resolves it anyway.
+        let sites: unknown;
+        try {
+          sites = await client.listSites();
+        } catch (verifyError) {
+          const raw = verifyError instanceof Error ? verifyError.message : String(verifyError);
+          const message = raw.endsWith(".") ? raw : `${raw}.`;
+          return ok({
+            connected: true,
+            storedAt: tokens.status().path,
+            grantedScope: response.scope,
+            note:
+              `Токен получен и сохранён, вход выполнен. Проверочный вызов к API не удался: ${message} ` +
+              "Скорее всего, подключение работает — попробуйте любой инструмент данных; " +
+              "если ошибка повторится, это проблема доступа токена, а не входа.",
+          });
+        }
         const hosts = (sites as { hosts?: unknown[] })?.hosts;
         const found = Array.isArray(hosts) ? hosts.length : 0;
 

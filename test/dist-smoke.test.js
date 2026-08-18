@@ -209,6 +209,9 @@ test("unconfigured server offers the in-chat login: auth_status and a PKCE autho
     assert.equal(url.searchParams.get("code_challenge_method"), "S256");
     assert.ok(url.searchParams.get("code_challenge"), "the URL must carry a PKCE challenge");
     assert.ok(!url.search.includes("client_secret"), "a public client must not leak a secret");
+    // Nothing dead in the URL either: `state` guards a redirect callback, and this
+    // hand-copied-code flow has none — PKCE alone binds the exchange.
+    assert.equal(url.searchParams.get("state"), null);
   } finally {
     await client.close();
   }

@@ -1,4 +1,5 @@
-import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -46,19 +47,23 @@ export function readCredentials(): StoredCredentials | undefined {
 }
 
 /**
- * Writes credentials with owner-only permissions. The mode is set on the open
- * *and* re-applied with chmod, because an existing file keeps its old mode when
- * writeFileSync merely truncates it.
+ * Writes credentials atomically with owner-only permissions: the JSON goes into
+ * a fresh temp file in the same directory (0600 from the moment it is opened —
+ * a fresh file always takes the requested mode, unlike truncating an existing
+ * one) and is then renamed over the target. A crash mid-write can therefore
+ * never leave a half-written credentials.json, and no chmod race window exists.
  */
 export function writeCredentials(credentials: StoredCredentials): string {
   const file = credentialsPath();
   mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-  writeFileSync(file, `${JSON.stringify(credentials, null, 2)}\n`, { mode: 0o600 });
+  // Same directory as the target: rename is only atomic within one filesystem.
+  const tmp = join(dirname(file), `.credentials-${randomBytes(6).toString("hex")}.tmp`);
   try {
-    chmodSync(file, 0o600);
-  } catch {
-    // Windows and some network filesystems do not implement POSIX modes; the
-    // write itself succeeded, which is what the caller cares about.
+    writeFileSync(tmp, `${JSON.stringify(credentials, null, 2)}\n`, { mode: 0o600 });
+    renameSync(tmp, file);
+  } catch (err) {
+    rmSync(tmp, { force: true });
+    throw err;
   }
   return file;
 }
