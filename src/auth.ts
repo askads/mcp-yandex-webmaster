@@ -102,7 +102,10 @@ export class TokenStore {
       clientId: oauthClientId(),
       fetchImpl: this.fetchImpl,
     });
-    return this.save(response);
+    // Yandex may omit refresh_token when it does not rotate it. Keep the one that
+    // just worked — overwriting it with undefined would strand the user at the
+    // next expiry with a re-login for no reason.
+    return this.save({ ...response, refresh_token: response.refresh_token ?? token });
   }
 
   /** True when a stored refresh token exists — i.e. a retry after 401 is worth trying. */
