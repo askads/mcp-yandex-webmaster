@@ -84,8 +84,21 @@ export const WRITE = {
 } as const;
 
 /**
+ * Idempotent, non-destructive write (finish_login): it overwrites the stored
+ * credentials file, and re-applying the same input converges on the same state
+ * — unlike the API writes above, where a repeat is a 409.
+ */
+export const WRITE_UPDATE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
+/**
  * The raw escape hatch can reach DELETE endpoints (delete site / delete sitemap),
- * so it is flagged destructive on top of WRITE.
+ * so it is flagged destructive on top of WRITE. Also carried by logout, which
+ * deletes the stored credentials file.
  */
 export const DESTRUCTIVE = {
   ...WRITE,

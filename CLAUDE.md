@@ -5,9 +5,10 @@ tools (sites, summary, diagnostics, search queries, indexing, sitemaps, links)
 plus four non-destructive writes (`add_site`, `add_sitemap`, `recrawl_url`,
 `start_verification`); `raw_request` is the escape hatch (GET/POST/DELETE). The
 server talks to `https://api.webmaster.yandex.net/v4`; auth is a Yandex OAuth
-token sent as `Authorization: OAuth <token>`, and almost every path lives under
-`/user/{user-id}/...` — the client resolves the user id via `GET /v4/user` once
-and caches it (or takes `YANDEX_USER_ID`).
+token sent as `Authorization: OAuth <token>` — either `YANDEX_OAUTH_TOKEN` or a
+token minted by the in-chat login (`start_login`/`finish_login`). Almost every
+path lives under `/user/{user-id}/...` — the client resolves the user id via
+`GET /v4/user` once and caches it (or takes `YANDEX_USER_ID`).
 
 ## Commands
 
@@ -22,40 +23,56 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
 ## Architecture
 
 - `src/config.ts` — env → config. A missing `YANDEX_OAUTH_TOKEN` is NOT an error: the field
-  stays `undefined` (an empty string reads as absent) and the server starts degraded, with the
-  client raising `CredentialsError` at call time. `ConfigError` (with a `reason` code) is
-  reserved for malformed values — today a non-numeric `YANDEX_USER_ID` — and is caught by
-  `loadConfigOrDegraded` in `index.ts`. Also home to `CredentialsError` /
-  `MISSING_TOKEN_MESSAGE` (opens with the historical startup error verbatim, then names the
-  variable and the restart). Optional `YANDEX_USER_ID`, `YANDEX_WEBMASTER_HOST_ID`,
-  `YANDEX_WEBMASTER_API_BASE`, `YANDEX_WEBMASTER_TIMEOUT_MS`, `YANDEX_WEBMASTER_MAX_RETRIES`.
+  stays `undefined` (an empty string reads as absent) and the server starts degraded — the
+  token is resolved per request (env → stored login), so the user can connect from the chat.
+  `ConfigError` (with a `reason` code) is reserved for malformed values — today a non-numeric
+  `YANDEX_USER_ID` — and is caught by `loadConfigOrDegraded` in `index.ts`. Optional
+  `YANDEX_USER_ID`, `YANDEX_WEBMASTER_HOST_ID`, `YANDEX_WEBMASTER_API_BASE`,
+  `YANDEX_WEBMASTER_TIMEOUT_MS`, `YANDEX_WEBMASTER_MAX_RETRIES`.
+- `src/oauth.ts` — the OAuth flow: PKCE pair (S256), authorize URL against
+  `https://oauth.yandex.ru/verification_code`, code exchange and refresh. **No `client_secret`** —
+  this is a public client, and a secret inside an npm package would protect nothing. The pending
+  verifier lives in one module-level slot (one stdio server = one user); a second `start_login`
+  replaces it. The client id is the dedicated Webmaster app, overridable via
+  `YANDEX_WEBMASTER_OAUTH_CLIENT_ID`; scope is pinned to `webmaster:hostinfo webmaster:verify`.
+- `src/credentials.ts` — `~/.config/mcp-yandex-webmaster/credentials.json`, mode `0600`. An
+  unparsable file reads as "not connected", never as an empty token.
+- `src/auth.ts` — `TokenStore`: resolves the token per request (env wins over stored), refreshes
+  on expiry, and raises `AuthRequiredError` whose *message* is the product — it is the only text
+  the user ever sees about a missing token, and it names both fixes (`start_login` in the chat,
+  or `YANDEX_OAUTH_TOKEN` + restart). Replaced the old `CredentialsError`.
 - `src/client.ts` — one typed method per endpoint. Owns the wire vocabulary
   (`TOTAL_SHOWS`, `MOBILE_AND_TABLET`, `DNS`, ... via `map*` helpers), the user-id
-  promise cache (`userId()`, failure not cached), the host path builder (`hostPath()`
-  applies the config default and URL-encodes the id, failing fast without a fetch when
-  both are missing) and query-string building (arrays become repeated params, undefined
-  is dropped). `request()` first rejects a missing token with `CredentialsError` — before the
-  request is built, the retries and fetch, which also stops the user-id auto-detection — then
-  resolves the path against the base and rejects any path that
-  escapes to a foreign origin (SSRF guard), retries 429 (except `QUOTA_EXCEEDED`) but
-  5xx/network **only for GET** (a 502 after a committed write must not duplicate it), honors `Retry-After`,
-  enforces an AbortController timeout that also covers reading the body, and throws
-  `WebmasterError(status, body)`.
+  promise cache (`userId()`, failure not cached — that is what lets the auto-detection
+  run lazily on the first call after a mid-session login), the host path builder
+  (`hostPath()` applies the config default and URL-encodes the id, failing fast without
+  a fetch when both are missing) and query-string building (arrays become repeated
+  params, undefined is dropped). `request()` resolves the token via the `TokenStore` on
+  every attempt, before fetch — a missing token throws `AuthRequiredError` there and is
+  rethrown before the retry/backoff branch, which also stops the user-id auto-detection —
+  resolves the path against the base and rejects any path that escapes to a foreign
+  origin (SSRF guard), retries 429 (except `QUOTA_EXCEEDED`) but 5xx/network **only for
+  GET** (a 502 after a committed write must not duplicate it), honors `Retry-After`,
+  re-mints a stored token once on 401 and replays, enforces an AbortController timeout
+  that also covers reading the body, and throws `WebmasterError(status, body)`.
 - `src/types.ts` — config + normalized unions; `WebmasterError` parses the API's
   `{error_code, error_message, ...}` body and appends follow-up hints for
   `HOST_NOT_VERIFIED` / `HOST_NOT_LOADED` / `HOST_NOT_INDEXED` (and
   `available_user_id` for `INVALID_USER_ID`).
-- `src/tools/hosts.ts` — sites, summary, verification, diagnostics; `queries.ts` —
+- `src/tools/auth.ts` — the in-chat login (`auth_status`, `start_login`, `finish_login`,
+  `logout`); `hosts.ts` — sites, summary, verification, diagnostics; `queries.ts` —
   popular queries + history; `indexing.ts` — crawl history, recrawl, important pages,
   sitemaps; `links.ts` — external links; `raw.ts` — `raw_request` (substitutes a
-  `{user-id}` placeholder). `util.ts` — `ok`/`fail`, the `READ_ONLY`/`WRITE`/`DESTRUCTIVE`
-  annotation constants and shared zod schema factories (`hostId`, `isoDate`).
+  `{user-id}` placeholder). `util.ts` — `ok`/`fail`, the
+  `READ_ONLY`/`WRITE`/`WRITE_UPDATE`/`DESTRUCTIVE` annotation constants and shared zod
+  schema factories (`hostId`, `isoDate`).
 - `src/index.ts` — wires every `register*` into the McpServer. `loadConfigOrDegraded()`
   catches `ConfigError`, pings `startup_failed` (fire-and-forget) and degrades the config to
-  "no credentials"; an unconfigured start prepends `UNCONFIGURED_PREFIX` — plus
-  `Проблема конфигурации: <message>` when a ConfigError was caught — to the initialize
-  `instructions`, and `oninitialized` sends `server_start` for a configured install or
-  `unconfigured_start` (with the reason) otherwise.
+  "no credentials"; `connected = tokens.hasToken()` is resolved once, only to pick the
+  instructions text — an unconfigured start prepends `UNCONFIGURED_PREFIX` (naming
+  `start_login` and the env alternative) — plus `Проблема конфигурации: <message>` when a
+  ConfigError was caught — to the initialize `instructions`, and `oninitialized` sends
+  `server_start` for a configured install or `unconfigured_start` (with the reason) otherwise.
 - `src/telemetry.ts` — anonymous usage pings (ids/names/versions only, never data or
   arguments; fire-and-forget, must never block or throw; opt-out `ASKADS_TELEMETRY=0`).
   `server_start` means "a usable install started"; `unconfigured_start` is a degraded start
@@ -67,16 +84,19 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
 - **Never exit because of configuration.** A server that dies before the MCP handshake leaves
   the user with a red cross and no reason — telemetry across this line of servers showed that
   state accounted for nearly every unconfigured install, and almost none of them recovered.
-  A missing token is a survivable state: start, answer initialize (with the unconfigured
-  prefix in `instructions`) and tools/list, and let the first tool call fail with
-  `CredentialsError`. There are no login tools: the token comes only from the environment, so
-  the fix is the operator setting `YANDEX_OAUTH_TOKEN` and restarting the server.
+  A missing token is a survivable state: start, serve the login tools, and answer data calls
+  with `AuthRequiredError` — the fix is `start_login` right in the chat, or the operator
+  setting `YANDEX_OAUTH_TOKEN` and restarting the server. A malformed value (`ConfigError`,
+  e.g. an invalid `YANDEX_USER_ID`) still degrades the start instead of killing it.
   `config.test.ts`, `client.test.ts` and `test/dist-smoke.test.js` pin this.
-- **Credential failures are not transport failures.** `CredentialsError` is thrown at the top
-  of `request()` — before the request is built, the retry/backoff loop and fetch (every call,
-  including the user-id auto-detection, funnels through there) — retrying a missing token
-  burns seconds of backoff before the user sees the one message that helps. Pinned by
-  "fetch must not be called" assertions in `client.test.ts`.
+- **Auth failures are not transport failures.** `AuthRequiredError` is raised while resolving
+  the token — before fetch — and rethrown before the retry/backoff branch of `request()`
+  (every call, including the user-id auto-detection, funnels through there) — retrying a
+  missing token burns seconds of backoff before the user sees the one message that helps.
+  Pinned by "fetch must not be called" and timing assertions in `client.test.ts`.
+- **The token is resolved per request, never cached on the client.** That is what makes
+  `finish_login` take effect mid-session without a client restart — including the lazy
+  user-id auto-detection, whose failed lookups are never cached.
 - **Writes are gated.** Only `add_site`, `add_sitemap`, `recrawl_url` and
   `start_verification` are writes; they carry `WRITE` (non-destructive, non-idempotent —
   a repeat is a 409). `raw_request` carries `DESTRUCTIVE` because DELETE endpoints are

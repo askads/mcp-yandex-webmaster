@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { registerAuthTools } from "./auth.js";
 import { registerHostTools } from "./hosts.js";
 import { registerQueryTools } from "./queries.js";
 import { registerIndexingTools } from "./indexing.js";
 import { registerLinkTools } from "./links.js";
 import { registerRawTool } from "./raw.js";
-import { DESTRUCTIVE, READ_ONLY, WRITE } from "./util.js";
+import { DESTRUCTIVE, READ_ONLY, WRITE, WRITE_UPDATE } from "./util.js";
 
 interface Annotations {
   readOnlyHint?: boolean;
@@ -22,7 +23,8 @@ function collectAnnotations(): Record<string, Annotations | undefined> {
       annotations[name] = cfg.annotations;
     },
   };
-  // Registration reads the client only inside handlers, so a stub is fine here.
+  // Registration reads the client/store only inside handlers, so stubs are fine here.
+  registerAuthTools(server as never, {} as never, {} as never);
   registerHostTools(server as never, {} as never);
   registerQueryTools(server as never, {} as never);
   registerIndexingTools(server as never, {} as never);
@@ -39,6 +41,10 @@ const ANN = collectAnnotations();
  * are non-destructive writes and the raw hatch can reach DELETE endpoints.
  */
 const EXPECTED: Record<string, Annotations> = {
+  auth_status: READ_ONLY,
+  start_login: READ_ONLY,
+  finish_login: WRITE_UPDATE,
+  logout: DESTRUCTIVE,
   get_user_id: READ_ONLY,
   list_sites: READ_ONLY,
   add_site: WRITE,
@@ -57,7 +63,7 @@ const EXPECTED: Record<string, Annotations> = {
   raw_request: DESTRUCTIVE,
 };
 
-test("registers all sixteen tools with annotations", () => {
+test("registers all twenty tools with annotations", () => {
   assert.deepEqual(Object.keys(ANN).sort(), Object.keys(EXPECTED).sort());
   for (const [name, a] of Object.entries(ANN)) {
     assert.ok(a, `${name} is missing annotations`);
@@ -70,14 +76,29 @@ test("every tool carries its expected hints, all four set explicitly", () => {
   }
 });
 
-test("reads are idempotent and non-destructive; writes are neither", () => {
+test("reads are idempotent and non-destructive; API writes are neither", () => {
   for (const [name, a] of Object.entries(ANN)) {
     if (a?.readOnlyHint) {
       assert.equal(a.destructiveHint, false, `${name} is read-only, must be non-destructive`);
       assert.equal(a.idempotentHint, true, `${name} is read-only, must be idempotent`);
-    } else {
+    } else if (name !== "finish_login") {
+      // finish_login is the one idempotent write: it overwrites the credentials
+      // file, so re-applying the same input converges instead of returning a 409.
       assert.equal(a?.idempotentHint, false, `${name} is a write, a repeat is a 409 — not idempotent`);
     }
     assert.equal(a?.openWorldHint, true, `${name} should set openWorldHint`);
   }
+});
+
+test("login tools are hinted by what they touch, not by what they talk to", () => {
+  // Reading state or minting a URL changes nothing.
+  for (const name of ["auth_status", "start_login"]) {
+    assert.deepEqual(ANN[name], READ_ONLY, `${name} should be read-only`);
+  }
+  // finish_login writes the credentials file; logout deletes it. A client that
+  // auto-approves reads must still prompt before either.
+  assert.equal(ANN.finish_login?.readOnlyHint, false);
+  assert.equal(ANN.finish_login?.destructiveHint, false);
+  assert.equal(ANN.logout?.readOnlyHint, false);
+  assert.equal(ANN.logout?.destructiveHint, true);
 });
