@@ -10,6 +10,22 @@ are normalized snake_case; the client maps them to the API's wire values
 Every tool that touches a site takes `host_id` (the `https:example.com:443`-style
 id from `list_sites`); it can be omitted when `YANDEX_WEBMASTER_HOST_ID` is set.
 
+## Connection (in-chat login)
+
+| Tool | Description |
+|---|---|
+| `auth_status` | Whether a token exists, where it came from (`env` / `stored`), when it expires and where the credentials file lives. Touches no network, never shows the token itself. |
+| `start_login` | First step of the in-chat login: returns a Yandex OAuth URL. The user signs in and gets a confirmation code (valid for 10 minutes). |
+| `finish_login` | Second step: exchanges the code for a token, stores it in `~/.config/mcp-yandex-webmaster/credentials.json` (mode `0600`) and immediately verifies it with a live call. Takes effect without a client restart. |
+| `logout` | Deletes the stored token. Never touches `YANDEX_OAUTH_TOKEN` and does not revoke the grant on Yandex's side (that lives in Yandex ID). |
+
+Notes:
+- **The secret never leaves the machine.** The flow is OAuth + PKCE (S256): the
+  `code_verifier` stays in the process, so the one-shot code passing through the
+  chat is useless without it.
+- **Source priority:** `YANDEX_OAUTH_TOKEN` beats the stored login. An env token
+  is never refreshed or deleted by the server.
+
 ## Sites & verification
 
 | Tool | Description |
@@ -65,7 +81,8 @@ Notes:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `YANDEX_OAUTH_TOKEN` | yes | — | Yandex OAuth token with Webmaster access, sent as `Authorization: OAuth <token>`. Treat it as a secret. |
+| `YANDEX_OAUTH_TOKEN` | no | — | Ready-made Yandex OAuth token with Webmaster access, sent as `Authorization: OAuth <token>` — for CI and automated installs where there is no chat; otherwise use the in-chat login. Beats the stored login; never refreshed or deleted by the server. Treat it as a secret. |
+| `YANDEX_WEBMASTER_OAUTH_CLIENT_ID` | no | the A1-x-Tech app | ClientID of your own OAuth app for the in-chat login (Redirect URI must be `https://oauth.yandex.ru/verification_code`). |
 | `YANDEX_USER_ID` | no | auto | Token owner's user id; skips the `GET /v4/user` roundtrip. |
 | `YANDEX_WEBMASTER_HOST_ID` | no | — | Default `host_id` used when a tool call omits one. |
 | `YANDEX_WEBMASTER_API_BASE` | no | `https://api.webmaster.yandex.net/v4` | API root override. |

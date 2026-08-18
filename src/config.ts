@@ -21,41 +21,17 @@ export class ConfigError extends Error {
 }
 
 /**
- * What a tool call without a token reads. The first sentence is the historical
- * startup error, verbatim — the rest exists because the token comes only from
- * the environment, so the fix is an operator action plus a restart, never a
- * retry.
- */
-export const MISSING_TOKEN_MESSAGE =
-  "YANDEX_OAUTH_TOKEN is required (Yandex OAuth token with access to Yandex Webmaster). " +
-  "This is not a network failure and retrying will not help: the operator must set this " +
-  "environment variable in the MCP client's server config and restart the server — it is " +
-  "read only at startup.";
-
-/**
- * Raised when a tool call needs the OAuth token and none was configured. The
- * message is the whole point of the class: it is the only text the calling
- * model reads about the missing setup, so it names the fix (which variable,
- * and that a restart is needed) instead of the failure.
- */
-export class CredentialsError extends Error {
-  constructor(message: string = MISSING_TOKEN_MESSAGE) {
-    super(message);
-    this.name = "CredentialsError";
-  }
-}
-
-/**
  * Builds the client config from environment variables.
  *
- * A missing token is NOT an error here: the server starts anyway and the
- * client raises {@link CredentialsError} on the first tool call, so an
- * unconfigured install completes the MCP handshake and carries the fix into
- * the session instead of dying before it with nothing to read. A malformed
- * value — a non-numeric YANDEX_USER_ID — still throws, because guessing what
- * the user meant is worse.
+ * A missing token is NOT an error here: the server starts anyway and the token
+ * is resolved per request (env → stored credentials), so an unconfigured
+ * install can log in from the chat instead of dying before the MCP handshake —
+ * which is where it used to leave the user with a silent dead server and
+ * nothing to read. A malformed value — a non-numeric YANDEX_USER_ID — still
+ * throws, because guessing what the user meant is worse.
  *
- *   YANDEX_OAUTH_TOKEN           Yandex OAuth token with Webmaster access
+ *   YANDEX_OAUTH_TOKEN           Yandex OAuth token with Webmaster access (optional:
+ *                                the in-chat login stores its own token; env wins)
  *   YANDEX_USER_ID               Override the user id (default: auto via GET /v4/user)
  *   YANDEX_WEBMASTER_HOST_ID     Default host_id, e.g. https:example.com:443
  *   YANDEX_WEBMASTER_API_BASE    API root override (default Yandex Webmaster API v4)

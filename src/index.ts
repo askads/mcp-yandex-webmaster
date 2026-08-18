@@ -2,10 +2,12 @@
 import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { TokenStore } from "./auth.js";
 import { WebmasterClient } from "./client.js";
 import { ConfigError, DEFAULT_BASE, loadConfig } from "./config.js";
 import { instrumentToolCalls, Telemetry } from "./telemetry.js";
 import type { WebmasterConfig } from "./types.js";
+import { registerAuthTools } from "./tools/auth.js";
 import { registerHostTools } from "./tools/hosts.js";
 import { registerQueryTools } from "./tools/queries.js";
 import { registerIndexingTools } from "./tools/indexing.js";
@@ -33,19 +35,16 @@ const INSTRUCTIONS =
   "sitemap можно только через raw_request с DELETE — безвозвратно и лишь по явной просьбе.";
 
 /**
- * Prepended to INSTRUCTIONS when no token is configured. The model reads this
+ * Prepended to INSTRUCTIONS when no token is available. The model reads this
  * before it picks a tool, so an unconfigured session opens with the fix rather
- * than with a failed call. There is no in-chat login: the token comes only
- * from the environment, so the fix is an operator action + restart. In Russian,
- * like INSTRUCTIONS.
+ * than with a failed call. In Russian, like INSTRUCTIONS.
  */
 const UNCONFIGURED_PREFIX =
-  "ВНИМАНИЕ: Яндекс Вебмастер ещё не подключён — не задана переменная окружения " +
-  "YANDEX_OAUTH_TOKEN, поэтому любой вызов инструмента вернёт ошибку. Подключиться из диалога " +
-  "нельзя: оператор должен задать YANDEX_OAUTH_TOKEN (OAuth-токен Яндекса с доступом к API " +
-  "Вебмастера; приложение регистрируется на oauth.yandex.ru, токен выдаёт " +
-  "oauth.yandex.ru/authorize?response_type=token&client_id=<id_приложения>) в конфигурации " +
-  "MCP-клиента и перезапустить сервер — переменные окружения читаются только при старте. ";
+  "ВНИМАНИЕ: Яндекс Вебмастер ещё не подключён — токена нет, поэтому любой инструмент данных " +
+  "вернёт ошибку. Подключение делается прямо в диалоге и без перезапуска клиента: вызовите " +
+  "start_login, покажите пользователю ссылку, попросите войти под аккаунтом, которому видны " +
+  "нужные сайты, и прислать код подтверждения, затем передайте код в finish_login. " +
+  "Альтернатива — задать YANDEX_OAUTH_TOKEN в конфигурации MCP-клиента и перезапустить сервер. ";
 
 /** Reads the package version so the server reports its real version to MCP clients. */
 function readVersion(): string {
@@ -89,11 +88,12 @@ async function main(): Promise<void> {
   // problem can be reported; wired to the server before tools register.
   const telemetry = new Telemetry(readVersion());
   const { config, problem } = loadConfigOrDegraded(telemetry);
-  const client = new WebmasterClient(config);
+  const tokens = new TokenStore(config.token);
+  const client = new WebmasterClient(config, tokens);
 
-  // Decided once, at startup: the token comes only from the environment, so
-  // "restart after setting the variable" is the accurate advice to give.
-  const connected = Boolean(config.token);
+  // Resolved once, at startup, only to pick the instructions text: the token
+  // itself is re-read per request, so a login mid-session still takes effect.
+  const connected = tokens.hasToken();
 
   const server = new McpServer(
     {
@@ -117,6 +117,7 @@ async function main(): Promise<void> {
     else telemetry.send("unconfigured_start", { reason: problem?.reason ?? "missing_token" });
   };
 
+  registerAuthTools(server, client, tokens);
   registerHostTools(server, client);
   registerQueryTools(server, client);
   registerIndexingTools(server, client);
@@ -126,7 +127,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(
-    `mcp-yandex-webmaster running on stdio${connected ? "" : " (no token — set YANDEX_OAUTH_TOKEN and restart)"}`,
+    `mcp-yandex-webmaster running on stdio${connected ? "" : " (no token — connect via start_login)"}`,
   );
 }
 

@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { AuthRequiredError, NOT_CONNECTED_MESSAGE, TokenStore } from "./auth.js";
+import { writeCredentials } from "./credentials.js";
 import { WebmasterClient } from "./client.js";
-import { CredentialsError, MISSING_TOKEN_MESSAGE } from "./config.js";
 import type { WebmasterConfig } from "./types.js";
 
 const BASE = "https://api.webmaster.yandex.net/v4";
@@ -484,49 +488,144 @@ test("a leading slash stays under the /v4 base", async () => {
   }
 });
 
-// --- Missing token (degraded start) ---
+// --- Missing token (degraded start) and the in-chat login ---
+
+/** Points XDG_CONFIG_HOME at a fresh temp dir so the developer's real stored login never leaks in. */
+function withTempConfigDir(): () => void {
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = mkdtempSync(join(tmpdir(), "mcp-webmaster-client-"));
+  return () => {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  };
+}
 
 /**
  * The degraded-start contract: a server without a token still runs, so the
  * client must fail the call itself — with the exact actionable message, before
  * any fetch. Zero fetch calls proves the error skips the retry/backoff loop
  * and the user-id auto-detection alike (maxRetries is deliberately non-zero
- * here, and listSites would otherwise start with GET /user).
+ * here, and listSites would otherwise start with GET /user); the timing
+ * assertion proves it never sat in backoff.
  */
-test("no token: CredentialsError with the exact text, fetch never called", async () => {
+test("no token: AuthRequiredError with the exact text, fetch never called", async () => {
+  const restoreEnv = withTempConfigDir();
   const mock = mockFetch(() => new Response("{}", { status: 200 }));
   try {
-    const client = new WebmasterClient({ apiBase: BASE, maxRetries: 3, retryBaseMs: 0 });
+    const client = new WebmasterClient({ apiBase: BASE, maxRetries: 5, retryBaseMs: 1000 });
+    const started = Date.now();
     await assert.rejects(
       () => client.listSites(),
       (err: unknown) => {
-        assert.ok(err instanceof CredentialsError, "must be a CredentialsError");
-        assert.equal((err as Error).name, "CredentialsError");
-        assert.equal((err as Error).message, MISSING_TOKEN_MESSAGE);
-        // The historical startup error, verbatim — the message is the product.
-        assert.ok(
-          (err as Error).message.startsWith(
-            "YANDEX_OAUTH_TOKEN is required (Yandex OAuth token with access to Yandex Webmaster).",
-          ),
-          "the message must open with the historical startup error, verbatim",
-        );
-        assert.match((err as Error).message, /restart the server/, "the fix must mention the restart");
+        assert.ok(err instanceof AuthRequiredError, "must be an AuthRequiredError");
+        assert.equal((err as Error).name, "AuthRequiredError");
+        // The message is the product: pinned verbatim, naming both fixes.
+        assert.equal((err as Error).message, NOT_CONNECTED_MESSAGE);
+        assert.match((err as Error).message, /start_login/, "must name the in-chat login");
+        assert.match((err as Error).message, /YANDEX_OAUTH_TOKEN/, "and the env variable");
+        assert.match((err as Error).message, /перезапустить сервер/, "and the restart for the env path");
         return true;
       },
     );
+    assert.ok(Date.now() - started < 500, "the answer must be immediate, not backed off");
     assert.equal(mock.calls.length, 0, "must not fetch at all — no user-id lookup, no retries");
   } finally {
     mock.restore();
+    restoreEnv();
   }
 });
 
 test("an empty token is a missing token, not an empty credential", async () => {
+  const restoreEnv = withTempConfigDir();
   const mock = mockFetch(() => new Response("{}", { status: 200 }));
   try {
     const client = new WebmasterClient({ token: "", userId: 7, apiBase: BASE, maxRetries: 0 });
-    await assert.rejects(() => client.listSites(), CredentialsError);
+    await assert.rejects(() => client.listSites(), AuthRequiredError);
     assert.equal(mock.calls.length, 0);
   } finally {
     mock.restore();
+    restoreEnv();
+  }
+});
+
+/**
+ * The property the whole flow exists for: finish_login writes the credentials
+ * file mid-session, and the very next data call on the SAME client works —
+ * including the lazy user-id auto-detection, which must not have cached the
+ * earlier "not connected" failure.
+ */
+test("a login taking effect mid-session: the next call auto-detects the user id and succeeds", async () => {
+  const restoreEnv = withTempConfigDir();
+  const mock = mockFetch((url) => {
+    if (/\/v4\/user$/.test(url)) return new Response(JSON.stringify({ user_id: 7 }), { status: 200 });
+    return new Response(JSON.stringify({ hosts: [] }), { status: 200 });
+  });
+  try {
+    const client = new WebmasterClient({ apiBase: BASE, maxRetries: 0, retryBaseMs: 0 });
+    await assert.rejects(() => client.listSites(), AuthRequiredError);
+    assert.equal(mock.calls.length, 0, "the failed call must not have touched the network");
+
+    // What finish_login does: the token lands on disk, nothing else changes.
+    writeCredentials({ access_token: "minted-in-chat", obtained_at: Date.now() });
+
+    const result = await client.listSites();
+    assert.deepEqual(result, { hosts: [] });
+    assert.deepEqual(
+      mock.calls.map((c) => c.url),
+      [`${BASE}/user`, `${BASE}/user/7/hosts`],
+      "the user id is auto-detected lazily, on the first call that has a token",
+    );
+    assert.equal(
+      (mock.calls[0].init.headers as Record<string, string>).Authorization,
+      "OAuth minted-in-chat",
+      "the stored token must be picked up without a restart",
+    );
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});
+
+/**
+ * A stored token can be revoked in Yandex ID long before its stated expiry, and
+ * only the API knows: a 401 triggers one silent re-mint from the refresh token
+ * and a replay. The transport retry budget must not be spent on it.
+ */
+test("a 401 on a stored token re-mints once via the refresh token and replays", async () => {
+  const restoreEnv = withTempConfigDir();
+  writeCredentials({ access_token: "revoked", refresh_token: "rt", obtained_at: Date.now() });
+  const tokens: string[] = [];
+  const mock = mockFetch((url, init) => {
+    if (url.startsWith("https://oauth.yandex.ru/token")) {
+      return new Response(JSON.stringify({ access_token: "fresh", refresh_token: "rt2" }), { status: 200 });
+    }
+    const auth = (init.headers as Record<string, string>).Authorization;
+    tokens.push(auth);
+    if (auth === "OAuth revoked") return new Response("{}", { status: 401 });
+    return new Response(JSON.stringify({ user_id: 7 }), { status: 200 });
+  });
+  try {
+    const client = new WebmasterClient({ apiBase: BASE, userId: 7, maxRetries: 0, retryBaseMs: 0 });
+    const result = await client.user();
+    assert.deepEqual(result, { user_id: 7 });
+    assert.deepEqual(tokens, ["OAuth revoked", "OAuth fresh"], "one replay with the re-minted token");
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});
+
+/** env beats stored — an explicitly configured install must behave exactly as before. */
+test("an explicit TokenStore with an env token ignores the stored login", async () => {
+  const restoreEnv = withTempConfigDir();
+  writeCredentials({ access_token: "stored", obtained_at: Date.now() });
+  const mock = mockFetch(() => new Response(JSON.stringify({ user_id: 1 }), { status: 200 }));
+  try {
+    const client = new WebmasterClient({ apiBase: BASE, maxRetries: 0 }, new TokenStore("from-env"));
+    await client.user();
+    assert.equal((mock.calls[0].init.headers as Record<string, string>).Authorization, "OAuth from-env");
+  } finally {
+    mock.restore();
+    restoreEnv();
   }
 });

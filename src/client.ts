@@ -1,4 +1,4 @@
-import { CredentialsError } from "./config.js";
+import { AuthRequiredError, TokenStore } from "./auth.js";
 import type { DeviceType, QueryIndicator, QueryOrder, VerificationType, WebmasterConfig } from "./types.js";
 import { WebmasterError } from "./types.js";
 
@@ -75,16 +75,28 @@ export class WebmasterClient {
   /** Lazy cache for the token owner's user id (see {@link userId}). */
   private userIdCache?: Promise<number>;
 
-  constructor(private readonly config: WebmasterConfig) {
+  private readonly tokens: TokenStore;
+
+  constructor(
+    private readonly config: WebmasterConfig,
+    tokens?: TokenStore,
+  ) {
     this.base = config.apiBase.endsWith("/") ? config.apiBase : config.apiBase + "/";
     this.timeoutMs = config.timeoutMs ?? 60_000;
     this.maxRetries = config.maxRetries ?? 3;
     this.retryBaseMs = config.retryBaseMs ?? 500;
+    // Default store keeps the old contract for callers that pass a plain config
+    // (tests, smoke): config.token wins, stored credentials are the fallback.
+    this.tokens = tokens ?? new TokenStore(config.token);
   }
 
-  private headers(hasBody: boolean): Record<string, string> {
+  /**
+   * Resolved per request, never cached on the instance: `finish_login` writes a
+   * new token to disk mid-session and the very next call has to pick it up.
+   */
+  private async headers(hasBody: boolean): Promise<Record<string, string>> {
     const h: Record<string, string> = {
-      Authorization: `OAuth ${this.config.token}`,
+      Authorization: `OAuth ${await this.tokens.getToken()}`,
       Accept: "application/json",
     };
     if (hasBody) h["Content-Type"] = "application/json";
@@ -138,13 +150,6 @@ export class WebmasterClient {
     body?: Record<string, unknown>,
     query?: QueryParams,
   ): Promise<T> {
-    // A missing token is rejected before the request is built, retried or
-    // sent: it is a configuration problem, not transport trouble, so it must
-    // never enter the retry/backoff loop below — and fetch never fires without
-    // auth. Every call funnels through here, so this also stops the user-id
-    // auto-detection (pinned in client.test.ts).
-    if (!this.config.token) throw new CredentialsError();
-
     // Guard method !== "GET" keeps undici from crashing on a GET-with-body.
     const hasBody = body !== undefined && method !== "GET";
 
@@ -166,6 +171,9 @@ export class WebmasterClient {
     const target = url.toString();
 
     const idempotent = method === "GET";
+    // A stored token can be revoked (or die early) long before its stated expiry,
+    // and only the API knows: one silent re-mint + replay per request, then give up.
+    let refreshed = false;
 
     for (let attempt = 0; ; attempt++) {
       let res: Response;
@@ -175,12 +183,18 @@ export class WebmasterClient {
           target,
           {
             method,
-            headers: this.headers(hasBody),
+            headers: await this.headers(hasBody),
             body: hasBody ? JSON.stringify(body) : undefined,
           },
           path,
         ));
       } catch (err) {
+        // "Not connected" is raised while building the auth header, inside this
+        // try — but it is not transport trouble: retrying burns seconds of
+        // backoff before the user sees the one message that would help them.
+        // Every call funnels through here, so this also stops the user-id
+        // auto-detection before any fetch (pinned in client.test.ts).
+        if (err instanceof AuthRequiredError) throw err;
         // Network error or timeout: retry idempotent requests with backoff; on the
         // last attempt (or a non-idempotent method) rethrow the original error.
         if (idempotent && attempt < this.maxRetries) {
@@ -211,6 +225,27 @@ export class WebmasterClient {
       if (transient && attempt < this.maxRetries) {
         await delay(this.backoffMs(attempt, res));
         continue;
+      }
+
+      // The Webmaster API answers a dead or revoked token with 401. Re-mint once
+      // from the stored refresh token and replay; the retry budget above is for
+      // transport trouble and must not be spent here. A 403 is not a token
+      // problem (INVALID_USER_ID, missing rights) — re-minting would not fix it.
+      if (res.status === 401 && !refreshed && this.tokens.canRefresh()) {
+        refreshed = true;
+        try {
+          await this.tokens.refresh();
+          attempt--;
+          continue;
+        } catch (err) {
+          // Refresh itself failed (revoked in Yandex ID, network down): surface the
+          // actionable message instead of the original 401.
+          if (err instanceof AuthRequiredError) throw err;
+          throw new AuthRequiredError(
+            `Не удалось обновить токен Вебмастера: ${err instanceof Error ? err.message : String(err)}. ` +
+              "Вызовите start_login и подключитесь заново.",
+          );
+        }
       }
 
       if (!res.ok) throw new WebmasterError(res.status, data);
