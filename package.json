@@ -1,6 +1,6 @@
 {
   "name": "mcp-yandex-webmaster",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MCP server for the Yandex Webmaster API v4 — site indexing, search queries, sitemaps, diagnostics, external links and page recrawl for AI agents.",
   "mcpName": "io.github.askads/mcp-yandex-webmaster",
   "type": "module",
