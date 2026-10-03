@@ -1,0 +1,59 @@
+{
+  "name": "mcp-yandex-webmaster",
+  "displayName": "Yandex Webmaster MCP",
+  "version": "1.1.1",
+  "description": "Work with Yandex Webmaster from Claude: site indexing, search-query analytics, sitemaps, diagnostics, external links and recrawl requests.",
+  "author": {
+    "name": "AskAds",
+    "url": "https://askads.ru"
+  },
+  "homepage": "https://github.com/askads/mcp-yandex-webmaster#readme",
+  "repository": "https://github.com/askads/mcp-yandex-webmaster",
+  "license": "MIT",
+  "keywords": [
+    "yandex-webmaster",
+    "seo",
+    "indexing",
+    "search-console"
+  ],
+  "userConfig": {
+    "token": {
+      "type": "string",
+      "title": "Yandex OAuth token",
+      "description": "OAuth token for the Yandex Webmaster API. Stored in your operating system's credential store, never in settings.json.",
+      "sensitive": true,
+      "required": true
+    },
+    "user_id": {
+      "type": "string",
+      "title": "Yandex user id",
+      "description": "Webmaster user id the token belongs to. Leave empty to resolve it from the token."
+    },
+    "host_id": {
+      "type": "string",
+      "title": "Default host id",
+      "description": "Host to use when a request does not name one, for example https:example.com:443."
+    },
+    "telemetry": {
+      "type": "string",
+      "title": "Anonymous telemetry",
+      "description": "Set to 0 to disable the anonymous usage telemetry the server sends by default. Leave as 1 to keep it on.",
+      "default": "1"
+    }
+  },
+  "mcpServers": {
+    "yandex-webmaster": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-yandex-webmaster@1.1.1"
+      ],
+      "env": {
+        "YANDEX_OAUTH_TOKEN": "${user_config.token}",
+        "YANDEX_USER_ID": "${user_config.user_id}",
+        "YANDEX_WEBMASTER_HOST_ID": "${user_config.host_id}",
+        "ASKADS_TELEMETRY": "${user_config.telemetry}"
+      }
+    }
+  }
+}
