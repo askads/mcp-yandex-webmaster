@@ -1,7 +1,7 @@
 {
   "name": "mcp-yandex-webmaster",
   "displayName": "Yandex Webmaster MCP",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Work with Yandex Webmaster from Claude: site indexing, search-query analytics, sitemaps, diagnostics, external links and recrawl requests.",
   "author": {
     "name": "gistrec",
@@ -47,7 +47,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "mcp-yandex-webmaster@1.1.1"
+        "mcp-yandex-webmaster@1.1.2"
       ],
       "env": {
         "YANDEX_OAUTH_TOKEN": "${user_config.token}",

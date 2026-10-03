@@ -1,6 +1,6 @@
 {
   "name": "mcp-yandex-webmaster",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "MCP server for the Yandex Webmaster API v4 — site indexing, search queries, sitemaps, diagnostics, external links and page recrawl for AI agents.",
   "mcpName": "io.github.askads/mcp-yandex-webmaster",
   "type": "module",
@@ -9,7 +9,8 @@
   },
   "files": [
     "dist",
-    "test"
+    "test",
+    "npm-shrinkwrap.json"
   ],
   "engines": {
     "node": ">=20"
@@ -24,7 +25,8 @@
     "test:src": "node --import tsx --test $(find src -name '*.test.ts')",
     "test:dist": "npm run build && node --test test/dist-smoke.test.js",
     "prepare": "npm run build",
-    "prepublishOnly": "npm run typecheck && npm test"
+    "prepublishOnly": "npm run typecheck && npm test",
+    "version": "npm shrinkwrap && git add npm-shrinkwrap.json"
   },
   "keywords": [
     "mcp",
