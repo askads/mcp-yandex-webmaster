@@ -23,17 +23,19 @@
       "title": "Yandex OAuth token",
       "description": "OAuth token for the Yandex Webmaster API. Stored in your operating system's credential store, never in settings.json.",
       "sensitive": true,
-      "required": true
+      "default": ""
     },
     "user_id": {
       "type": "string",
       "title": "Yandex user id",
-      "description": "Webmaster user id the token belongs to. Leave empty to resolve it from the token."
+      "description": "Webmaster user id the token belongs to. Leave empty to resolve it from the token.",
+      "default": ""
     },
     "host_id": {
       "type": "string",
       "title": "Default host id",
-      "description": "Host to use when a request does not name one, for example https:example.com:443."
+      "description": "Host to use when a request does not name one, for example https:example.com:443.",
+      "default": ""
     },
     "telemetry": {
       "type": "string",
