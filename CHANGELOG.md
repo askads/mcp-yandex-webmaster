@@ -5,6 +5,14 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
+## [1.2.2] — 2026-10-31
+
+### Исправлено
+
+- Телеметрия: исход ошибки определяется сначала по коду API в начале сообщения, а текстовые
+  шаблоны применяются, только если кода нет. Ошибка 8000 со списком полей, где есть
+  `ForbiddenPlatform`, считалась отказом в доступе.
+
 ## [1.2.1] — 2026-10-31
 
 ### Исправлено
@@ -126,6 +134,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
+[1.2.2]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.2
 [1.2.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.1
 [1.2.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.0
 [1.1.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.1.1
