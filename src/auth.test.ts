@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 
 import { AuthRequiredError, NOT_CONNECTED_MESSAGE, TokenStore } from "./auth.js";
 import { credentialsPath, readCredentials, writeCredentials } from "./credentials.js";
+import type { TokenResponse } from "./oauth.js";
 
 /**
  * Every test gets its own XDG_CONFIG_HOME, so the suite never reads or writes the
@@ -157,5 +158,54 @@ test("status never carries the token itself", async () => {
     const status = JSON.stringify(new TokenStore(undefined).status());
     assert.ok(!status.includes("super-secret"), "auth_status output must be safe to print");
     assert.ok(status.includes("credentials.json"), "but it must say where the file lives");
+  });
+});
+
+// Regression: auth_status failed with "RangeError: Invalid time value" on a
+// credentials.json that finish_login did not write (seen in 1.2.0 telemetry).
+const MALFORMED_TIMESTAMPS: Array<[string, Record<string, unknown>, string[]]> = [
+  ["a raw OAuth response without obtained_at", { expires_in: 31_536_000, refresh_token: "r" }, []],
+  ["ISO strings instead of epoch ms", { expires_at: "2027-01-01T00:00:00Z", obtained_at: "yesterday" }, ["expires_at", "obtained_at"]],
+  ["timestamps beyond the Date range", { expires_at: 1e20, obtained_at: 8.64e15 + 1 }, ["expires_at", "obtained_at"]],
+  ["zero and null", { expires_at: 0, obtained_at: null }, ["expires_at"]],
+];
+
+for (const [name, fields, unreadable] of MALFORMED_TIMESTAMPS) {
+  test(`status survives ${name} and reports the expiry as unknown`, async () => {
+    await withTempConfig(async () => {
+      writeCredentials({ access_token: "stored", obtained_at: 0 });
+      writeFileSync(credentialsPath(), JSON.stringify({ access_token: "stored", ...fields }));
+      const store = new TokenStore(undefined);
+      const status = store.status();
+      assert.equal(status.configured, true);
+      assert.equal(status.expiresAt, undefined);
+      assert.equal(status.obtainedAt, undefined);
+      assert.deepEqual(status.unreadableFields ?? [], unreadable);
+      assert.match(status.note ?? "", /неизвестен/);
+      assert.equal(await store.getToken(), "stored", "an unknown expiry does not block the token");
+    });
+  });
+}
+
+test("valid timestamps are shown as ISO dates without a note", async () => {
+  await withTempConfig(() => {
+    writeCredentials({ access_token: "s", expires_at: Date.UTC(2027, 0, 1), obtained_at: Date.UTC(2026, 0, 1) });
+    const status = new TokenStore(undefined).status();
+    assert.equal(status.expiresAt, "2027-01-01T00:00:00.000Z");
+    assert.equal(status.obtainedAt, "2026-01-01T00:00:00.000Z");
+    assert.equal(status.unreadableFields, undefined);
+    assert.equal(status.note, undefined);
+  });
+});
+
+test("save stores no expiry for an unusable expires_in", async () => {
+  await withTempConfig(() => {
+    const store = new TokenStore(undefined);
+    for (const expires_in of [0, -5, Number.NaN, 1e20, "3600"]) {
+      const saved = store.save({ access_token: "t", expires_in } as unknown as TokenResponse, 1_000);
+      assert.equal(saved.expires_at, undefined, `expires_in=${String(expires_in)}`);
+      assert.doesNotThrow(() => store.status());
+    }
+    assert.equal(store.save({ access_token: "t", expires_in: 3600 }, 1_000).expires_at, 3_601_000);
   });
 });
