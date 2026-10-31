@@ -29,12 +29,15 @@ export type TokenSource = "env" | "stored";
 export interface AuthStatus {
   configured: boolean;
   source?: TokenSource;
-  /** ISO date the stored access token expires; absent for env tokens. */
+  /** ISO date the stored access token expires; absent for env tokens and when unknown. */
   expiresAt?: string;
-  /** ISO date the stored token was obtained. */
+  /** ISO date the stored token was obtained; absent when the file has no usable value. */
   obtainedAt?: string;
+  /** Stored fields that are present but are not epoch-ms timestamps. */
+  unreadableFields?: string[];
   canRefresh: boolean;
   path: string;
+  note?: string;
 }
 
 export const NOT_CONNECTED_MESSAGE =
@@ -118,7 +121,7 @@ export class TokenStore {
     const credentials: StoredCredentials = {
       access_token: response.access_token,
       refresh_token: response.refresh_token,
-      expires_at: response.expires_in ? now + response.expires_in * 1000 : undefined,
+      expires_at: expiresAtFrom(response.expires_in, now),
       obtained_at: now,
     };
     writeCredentials(credentials);
@@ -136,18 +139,47 @@ export class TokenStore {
       return { configured: true, source: "env", canRefresh: false, path };
     }
     if (!stored) return { configured: false, canRefresh: false, path };
+    // The file may be hand-written or from another tool: no field but
+    // access_token is guaranteed, and new Date(bad).toISOString() throws.
+    const expiresAt = isoDate(stored.expires_at);
+    const obtainedAt = isoDate(stored.obtained_at);
+    const unreadableFields = (["expires_at", "obtained_at"] as const).filter(
+      (field) => stored[field] !== undefined && stored[field] !== null && !epochMs(stored[field]),
+    );
     return {
       configured: true,
       source: "stored",
-      expiresAt: stored.expires_at ? new Date(stored.expires_at).toISOString() : undefined,
-      obtainedAt: new Date(stored.obtained_at).toISOString(),
+      expiresAt,
+      obtainedAt,
+      unreadableFields: unreadableFields.length > 0 ? unreadableFields : undefined,
       canRefresh: Boolean(stored.refresh_token),
       path,
+      note: expiresAt
+        ? undefined
+        : "Срок действия сохранённого токена неизвестен: в файле нет читаемого expires_at. " +
+          "Если инструменты ответят ошибкой авторизации, пройдите start_login и finish_login заново.",
     };
   }
 }
 
+/** The value as epoch ms when it is a number Date can represent, otherwise undefined. */
+function epochMs(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
+  return Number.isNaN(new Date(value).getTime()) ? undefined : value;
+}
+
+function isoDate(value: unknown): string | undefined {
+  const ms = epochMs(value);
+  return ms === undefined ? undefined : new Date(ms).toISOString();
+}
+
+function expiresAtFrom(expiresIn: unknown, now: number): number | undefined {
+  return typeof expiresIn === "number" && expiresIn > 0 ? epochMs(now + expiresIn * 1000) : undefined;
+}
+
+/** An unknown expiry is not an expiry: the API's 401 triggers the refresh instead. */
 function isExpired(stored: StoredCredentials, now = Date.now()): boolean {
-  if (!stored.expires_at) return false;
-  return stored.expires_at - REFRESH_LEEWAY_MS <= now;
+  const expiresAt = epochMs(stored.expires_at);
+  if (expiresAt === undefined) return false;
+  return expiresAt - REFRESH_LEEWAY_MS <= now;
 }
