@@ -5,6 +5,15 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
+## [1.2.3] — 2026-10-31
+
+### Исправлено
+
+- Телеметрия: если выжимка текста ошибки ничего не нашла, собственные классы ошибок сервера
+  (`AuthRequiredError`, `AbortError` …) передают имя класса, без сообщения; обычный `Error` и
+  системные ошибки не передают ничего. Ошибки Node с `code`, `errno` или `syscall` передают только тип
+  и код. Раньше такие отказы приходили без текста.
+
 ## [1.2.2] — 2026-10-31
 
 ### Исправлено
@@ -134,6 +143,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
+[1.2.3]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.3
 [1.2.2]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.2
 [1.2.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.1
 [1.2.0]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.0
