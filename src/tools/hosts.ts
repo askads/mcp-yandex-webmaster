@@ -79,9 +79,7 @@ export function registerHostTools(server: McpServer, client: WebmasterClient): v
       description:
         "Возвращает сводную статистику сайта: sqi (ИКС — индекс качества сайта), searchable_pages_count " +
         "(страницы в поиске), excluded_pages_count (исключённые страницы) и site_problems — число проблем " +
-        "по категориям FATAL/CRITICAL/POSSIBLE_PROBLEM/RECOMMENDATION. Требует подтверждённых прав на сайт. " +
-        "Счётчики отвечают «сколько», а «почему» — get_site_diagnostics: прежде чем объяснять рост или падение " +
-        "числа страниц в поиске, взять и диагностику.",
+        "по категориям FATAL/CRITICAL/POSSIBLE_PROBLEM/RECOMMENDATION. Требует подтверждённых прав на сайт.",
       inputSchema: { host_id: hostId() },
     },
     async ({ host_id }) => {
