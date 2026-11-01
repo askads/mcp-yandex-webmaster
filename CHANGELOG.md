@@ -5,6 +5,14 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+### Удалено
+
+- `plugin/` — Claude- и Cursor-плагин со скиллом `indexing-check`. Плагины живут отдельно от
+  MCP-сервера (маркетплейс `askads/claude-plugins`), а этот был закреплён на точной версии
+  npm-пакета и обновлялся вручную с каждым релизом.
+
 ## [1.2.3] — 2026-10-31
 
 ### Исправлено
@@ -143,6 +151,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
+[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.2.3...HEAD
 [1.2.3]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.3
 [1.2.2]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.2
 [1.2.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.1
