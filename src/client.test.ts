@@ -629,3 +629,97 @@ test("an explicit TokenStore with an env token ignores the stored login", async 
     restoreEnv();
   }
 });
+
+// --- 403 ACCESS_FORBIDDEN: the token lacks an OAuth right ---
+
+/** The body the Webmaster API sends when the token was issued without webmaster:verify. */
+const MISSING_COMMON = {
+  error_code: "ACCESS_FORBIDDEN",
+  error_message:
+    "Access to this resource is not allowed with scopes available for this application. " +
+    "Required scope: COMMON, application scopes: [ALL_SCOPES, HOST_LIST, EXTERNAL_LINKS]",
+};
+
+/**
+ * The API names an internal scope (COMMON) the model cannot act on, and the fix
+ * depends on the token source: an env token wins over the stored login, so
+ * sending the user to start_login alone would change nothing.
+ */
+test("ACCESS_FORBIDDEN with an env token names webmaster:verify and the env fix", async () => {
+  const restoreEnv = withTempConfigDir();
+  const mock = mockFetch(() => new Response(JSON.stringify(MISSING_COMMON), { status: 403 }));
+  try {
+    const client = makeClient({ maxRetries: 3 });
+    const err = await client.siteSummary({}).then(
+      () => assert.fail("expected a rejection"),
+      (e: unknown) => e as Error,
+    );
+    // The API's own code and text stay first: telemetry and the model key on them.
+    assert.match(err.message, /^HTTP 403: \[ACCESS_FORBIDDEN\] Access to this resource/);
+    assert.match(err.message, /Required scope: COMMON/);
+    assert.match(err.message, /webmaster:verify/);
+    assert.match(err.message, /YANDEX_OAUTH_TOKEN/);
+    assert.match(err.message, /уберите YANDEX_OAUTH_TOKEN/);
+    assert.equal(mock.calls.length, 1, "a missing right is not transient — no retry");
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});
+
+test("ACCESS_FORBIDDEN with a stored login sends the user to start_login", async () => {
+  const restoreEnv = withTempConfigDir();
+  writeCredentials({ access_token: "stored", refresh_token: "rt", obtained_at: Date.now() });
+  const mock = mockFetch(() => new Response(JSON.stringify(MISSING_COMMON), { status: 403 }));
+  try {
+    const client = new WebmasterClient({ apiBase: BASE, userId: 7, hostId: HOST, maxRetries: 0 });
+    const err = await client.listSitemaps({}).then(
+      () => assert.fail("expected a rejection"),
+      (e: unknown) => e as Error,
+    );
+    assert.match(err.message, /webmaster:verify/);
+    assert.match(err.message, /start_login/);
+    assert.doesNotMatch(err.message, /уберите YANDEX_OAUTH_TOKEN/);
+    assert.equal(mock.calls.length, 1, "a 403 must not trigger the 401 re-mint");
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});
+
+test("an unknown required scope still gets the hint, under its own name", async () => {
+  const restoreEnv = withTempConfigDir();
+  const body = { error_code: "ACCESS_FORBIDDEN", error_message: "Not allowed. Required scope: SOMETHING_NEW" };
+  const mock = mockFetch(() => new Response(JSON.stringify(body), { status: 403 }));
+  try {
+    await assert.rejects(() => makeClient({ maxRetries: 0 }).siteSummary({}), (e: Error) => {
+      assert.match(e.message, /в ответе API — SOMETHING_NEW/);
+      assert.doesNotMatch(e.message, /webmaster:verify \(/);
+      return true;
+    });
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});
+
+test("other 403s (INVALID_USER_ID, ACCESS_FORBIDDEN without a scope) get no scope hint", async () => {
+  const restoreEnv = withTempConfigDir();
+  let body: unknown;
+  const mock = mockFetch(() => new Response(JSON.stringify(body), { status: 403 }));
+  try {
+    body = { error_code: "INVALID_USER_ID", error_message: "Invalid user id", available_user_id: 1 };
+    await assert.rejects(() => makeClient({ maxRetries: 0 }).siteSummary({}), (e: Error) => {
+      assert.doesNotMatch(e.message, /не хватает/);
+      return true;
+    });
+    body = { error_code: "ACCESS_FORBIDDEN", error_message: "Access denied" };
+    await assert.rejects(() => makeClient({ maxRetries: 0 }).siteSummary({}), (e: Error) => {
+      assert.equal(e.message, "HTTP 403: [ACCESS_FORBIDDEN] Access denied");
+      return true;
+    });
+  } finally {
+    mock.restore();
+    restoreEnv();
+  }
+});

@@ -229,7 +229,7 @@ claude mcp add --transport stdio --scope user \
 | `YANDEX_WEBMASTER_MAX_RETRIES` | Число повторов при временных ошибках; по умолчанию 3. |
 | `YANDEX_WEBMASTER_API_BASE` | Базовый адрес API; по умолчанию `https://api.webmaster.yandex.net/v4`. |
 
-Готовый токен для `YANDEX_OAUTH_TOKEN` можно получить так: создайте приложение на [oauth.yandex.ru](https://oauth.yandex.ru), в правах доступа выберите **API Яндекс Вебмастера** и получите токен по [инструкции Яндекс OAuth](https://yandex.ru/dev/id/doc/ru/access). Это же приложение подойдёт и для входа из диалога — задайте его ClientID в `YANDEX_WEBMASTER_OAUTH_CLIENT_ID` (Redirect URI — `https://oauth.yandex.ru/verification_code`).
+Готовый токен для `YANDEX_OAUTH_TOKEN` можно получить так: создайте приложение на [oauth.yandex.ru](https://oauth.yandex.ru), в правах доступа выберите **API Яндекс Вебмастера** — оба права, `webmaster:hostinfo` и `webmaster:verify`, и получите токен по [инструкции Яндекс OAuth](https://yandex.ru/dev/id/doc/ru/access). Это же приложение подойдёт и для входа из диалога — задайте его ClientID в `YANDEX_WEBMASTER_OAUTH_CLIENT_ID` (Redirect URI — `https://oauth.yandex.ru/verification_code`).
 
 Не публикуйте токен в чате, репозитории или скриншотах: он даёт доступ к сайтам вашего аккаунта.
 

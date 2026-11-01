@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### Исправлено
+
+- Ответ 403 `ACCESS_FORBIDDEN` «Required scope: COMMON» теперь объясняет, что токену не хватает
+  права `webmaster:verify`, а не прав на сайт, и что делать: для токена из `YANDEX_OAUTH_TOKEN` —
+  выпустить новый с правами `webmaster:hostinfo` и `webmaster:verify` или убрать переменную и
+  войти через `start_login`, для сохранённого входа — пройти `start_login` заново.
+
 ### Удалено
 
 - `plugin/` — Claude- и Cursor-плагин со скиллом `indexing-check`. Плагины живут отдельно от
