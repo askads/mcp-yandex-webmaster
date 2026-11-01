@@ -40,7 +40,8 @@ export function registerIndexingTools(server: McpServer, client: WebmasterClient
         "{task_id: UUID, quota_remainder: остаток суточной квоты} со статусом 202. Квота на сайт суточная " +
         "и зависит от сайта — показывайте пользователю quota_remainder. Ошибки: 400 INVALID_URL — URL не " +
         "принадлежит сайту или некорректен; 409 URL_ALREADY_ADDED — страница уже в очереди; " +
-        "429 QUOTA_EXCEEDED — суточная квота исчерпана, попробуйте завтра.",
+        "429 QUOTA_EXCEEDED — суточная квота исчерпана, попробуйте завтра. 202 означает «в очереди», " +
+        "а не «переобойдена»: сам переобход Яндекс не гарантирует.",
       inputSchema: {
         host_id: hostId(),
         url: z
