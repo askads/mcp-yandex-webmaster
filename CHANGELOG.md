@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.2.4] — 2026-11-01
+
 ### Исправлено
 
 - Ответ 403 `ACCESS_FORBIDDEN` «Required scope: COMMON» теперь объясняет, что токену не хватает
@@ -158,7 +160,8 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
-[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.2.3...HEAD
+[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.2.4...HEAD
+[1.2.4]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.3
 [1.2.2]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.2
 [1.2.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.1
