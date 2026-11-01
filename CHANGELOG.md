@@ -5,6 +5,15 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
 проект придерживается [семантического версионирования](https://semver.org/lang/ru/).
 
+## [Unreleased]
+
+### Исправлено
+
+- Ответ 403 `ACCESS_FORBIDDEN` «Required scope: COMMON» теперь объясняет, что токену не хватает
+  права `webmaster:verify`, а не прав на сайт, и что делать: для токена из `YANDEX_OAUTH_TOKEN` —
+  выпустить новый с правами `webmaster:hostinfo` и `webmaster:verify` или убрать переменную и
+  войти через `start_login`, для сохранённого входа — пройти `start_login` заново.
+
 ## [1.2.3] — 2026-10-31
 
 ### Исправлено
@@ -143,6 +152,7 @@
 - Документация: README, docs/TOOLS.md, docs/DEVELOPMENT.md, docs/PUBLISHING.md,
   CLAUDE.md; server.json + glama.json; CI (Node 20/22/24) и ежедневный health-check.
 
+[Unreleased]: https://github.com/askads/mcp-yandex-webmaster/compare/v1.2.3...HEAD
 [1.2.3]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.3
 [1.2.2]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.2
 [1.2.1]: https://github.com/askads/mcp-yandex-webmaster/releases/tag/v1.2.1

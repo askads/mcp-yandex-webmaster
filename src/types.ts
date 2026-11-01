@@ -60,12 +60,60 @@ export class WebmasterError extends Error {
   readonly status: number;
   readonly body?: unknown;
 
-  constructor(status: number, body: unknown) {
-    super(`HTTP ${status}: ${formatErrorBody(body)}`);
+  /** `hint` is advice the client derived from context the body lacks (e.g. the token source). */
+  constructor(status: number, body: unknown, hint?: string) {
+    super(`HTTP ${status}: ${formatErrorBody(body)}${hint ? ` — ${hint}` : ""}`);
     this.name = "WebmasterError";
     this.status = status;
     this.body = body;
   }
+}
+
+/**
+ * 403 ACCESS_FORBIDDEN «Access to this resource is not allowed with scopes
+ * available for this application. Required scope: COMMON, application scopes:
+ * [...]» means the token lacks an OAuth right, not that the user lacks rights to
+ * the site. The Webmaster names its *internal* scopes, which the model cannot map
+ * to anything actionable, and the fix depends on where the token came from: a
+ * stored login is fixed by start_login, an env token only by its owner issuing a
+ * new one (env wins over the stored login, so start_login alone changes nothing).
+ *
+ * COMMON is what every data endpoint except the site list and external links
+ * needs; a token holding webmaster:hostinfo without webmaster:verify gets exactly
+ * this answer (https://dev.to/jbobbink/building-a-yandex-seo-mcp-server-six-traps-in-the-yandex-webmaster-api-1bc5),
+ * and Yandex's guide requires both rights
+ * (https://yandex.ru/dev/webmaster/doc/ru/tasks/how-to-get-oauth).
+ */
+export function missingScopeHint(body: unknown, source?: "env" | "stored"): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const obj = body as Record<string, unknown>;
+  if (obj.error_code !== "ACCESS_FORBIDDEN" || typeof obj.error_message !== "string") return undefined;
+  const required = /Required scope:\s*([A-Z_]+)/i.exec(obj.error_message)?.[1];
+  if (!required) return undefined;
+
+  const right =
+    required.toUpperCase() === "COMMON"
+      ? "права webmaster:verify (в ответе API оно названо COMMON; без него работают только список сайтов и внешние ссылки)"
+      : `права Вебмастера (в ответе API — ${required})`;
+  const lead =
+    `Токену не хватает ${right}. Это не нехватка прав на сайт и не сбой — повтор и другие сайты не помогут. `;
+
+  if (source === "env") {
+    return (
+      lead +
+      "Токен взят из переменной YANDEX_OAUTH_TOKEN и выпущен без этого права. " +
+      "Нужен новый токен от приложения с правами webmaster:hostinfo и webmaster:verify, " +
+      "затем перезапуск сервера. Либо уберите YANDEX_OAUTH_TOKEN из конфигурации MCP-клиента, " +
+      "перезапустите сервер и подключитесь через start_login: пока переменная задана, " +
+      "вход из диалога не используется."
+    );
+  }
+  return (
+    lead +
+    "Вызовите start_login и подключитесь заново, подтвердив все запрошенные права. " +
+    "Если задан YANDEX_WEBMASTER_OAUTH_CLIENT_ID, у этого приложения должны быть включены " +
+    "права webmaster:hostinfo и webmaster:verify."
+  );
 }
 
 /** Turns a parsed Webmaster API error body into a short, readable message. */

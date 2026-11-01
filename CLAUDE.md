@@ -58,7 +58,9 @@ npm run smoke      # live READ-ONLY call (needs YANDEX_OAUTH_TOKEN)
 - `src/types.ts` — config + normalized unions; `WebmasterError` parses the API's
   `{error_code, error_message, ...}` body and appends follow-up hints for
   `HOST_NOT_VERIFIED` / `HOST_NOT_LOADED` / `HOST_NOT_INDEXED` (and
-  `available_user_id` for `INVALID_USER_ID`).
+  `available_user_id` for `INVALID_USER_ID`). `missingScopeHint()` turns 403
+  `ACCESS_FORBIDDEN` «Required scope: COMMON» (token lacks `webmaster:verify`) into advice that
+  depends on the token source — `request()` passes it in, since only the client knows the source.
 - `src/tools/auth.ts` — the in-chat login (`auth_status`, `start_login`, `finish_login`,
   `logout`); `hosts.ts` — sites, summary, verification, diagnostics; `queries.ts` —
   popular queries + history; `indexing.ts` — crawl history, recrawl, important pages,

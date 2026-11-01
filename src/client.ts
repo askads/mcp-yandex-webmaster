@@ -1,6 +1,6 @@
 import { AuthRequiredError, TokenStore } from "./auth.js";
 import type { DeviceType, QueryIndicator, QueryOrder, VerificationType, WebmasterConfig } from "./types.js";
-import { WebmasterError } from "./types.js";
+import { missingScopeHint, WebmasterError } from "./types.js";
 
 export type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -248,8 +248,22 @@ export class WebmasterClient {
         }
       }
 
-      if (!res.ok) throw new WebmasterError(res.status, data);
+      if (!res.ok) {
+        // A missing OAuth right is fixed differently per token source; only the
+        // client knows the source, so the hint is built here, not in the error.
+        const hint = res.status === 403 ? missingScopeHint(data, this.tokenSource()) : undefined;
+        throw new WebmasterError(res.status, data, hint);
+      }
       return data as T;
+    }
+  }
+
+  /** Where the current token came from; undefined if that cannot be told. */
+  private tokenSource(): "env" | "stored" | undefined {
+    try {
+      return this.tokens.status().source;
+    } catch {
+      return undefined;
     }
   }
 
